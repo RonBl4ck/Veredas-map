@@ -472,12 +472,45 @@ function renderMap() {
 }
 
 async function searchAddressOnMap() {
-  const query = clean($('mapAddressInput').value);
-  if (!query) return;
+  const rawQuery = clean($('mapAddressInput').value);
+  if (!rawQuery) return;
 
-  $('mapStatusChip').textContent = 'Buscando calle…';
+  $('mapStatusChip').textContent = 'Buscando ubicación…';
+
+  // 1. Detectar si el usuario ingresó coordenadas (ej. "-12.0463, -77.0423" o "-12.0463 -77.0423" o "-12.0463, -77.0423")
+  const coordRegex = /^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
+  const match = rawQuery.match(coordRegex);
+
+  if (match) {
+    const lat = parseFloat(match[1]);
+    const lon = parseFloat(match[2]);
+
+    if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      if (addressMarker) map.removeLayer(addressMarker);
+      addressMarker = L.marker([lat, lon], {
+        icon: L.divIcon({ className: 'custom-map-icon', html: '📍', iconSize: [32, 32], iconAnchor: [16, 32] })
+      }).addTo(map);
+
+      map.setView([lat, lon], 17);
+      addressMarker.bindPopup(`
+        <div style="font-size:12px;min-width:200px">
+          <b style="color:var(--navy)">📍 Coordenadas Ingresadas:</b><br>
+          Latitud: ${lat}<br>
+          Longitud: ${lon}
+        </div>
+      `).openPopup();
+
+      $('btnClearAddressPin').style.display = 'block';
+      $('mapStatusChip').textContent = 'Coordenadas ubicadas';
+      return;
+    }
+  }
+
+  // 2. Búsqueda por texto (colegios, avenidas, lugares de interés) en Nominatim
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Lima, Peru')}`;
+    // Si la búsqueda incluye una coma o ya menciona Lima/Perú, usamos el query directo; de lo contrario anexamos ", Lima, Perú"
+    const searchQuery = /peru|perú|lima/i.test(rawQuery) ? rawQuery : `${rawQuery}, Lima, Perú`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5`;
     const res = await fetch(url);
     const data = await res.json();
 
@@ -494,18 +527,18 @@ async function searchAddressOnMap() {
       map.setView([lat, lon], 16);
       addressMarker.bindPopup(`
         <div style="font-size:12px;min-width:200px">
-          <b style="color:var(--navy)">📍 Dirección Ubicada:</b><br>
+          <b style="color:var(--navy)">📍 Lugar Encontrado:</b><br>
           ${escapeHtml(first.display_name)}
         </div>
       `).openPopup();
 
       $('btnClearAddressPin').style.display = 'block';
-      $('mapStatusChip').textContent = 'Dirección ubicada';
+      $('mapStatusChip').textContent = 'Ubicación encontrada';
     } else {
-      $('mapStatusChip').textContent = 'Dirección no encontrada';
+      $('mapStatusChip').textContent = 'Ubicación no encontrada';
     }
   } catch (e) {
-    $('mapStatusChip').textContent = 'Error al buscar dirección';
+    $('mapStatusChip').textContent = 'Error al buscar ubicación';
   }
 }
 
