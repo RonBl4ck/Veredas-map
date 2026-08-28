@@ -11,11 +11,8 @@
  */
 
 const CFG = window.APP_CONFIG || {
-  spreadsheetId: '1aIuwzxrOsaOr5SvnOa3gS6mvdletuKerHadmGyPcP7Q',
-  dataSheetName: 'BASE_VEREDAS',
-  authSheetName: 'ACCESO',
-  dataCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQR-u2WM7H5JKzDykqVUKb3sCoZ9qNknBA5ZdfutnMYehSaEWaUOHZQrGjWC6-hHXCDhTxf7FMTAd7e/pub?gid=0&single=true&output=csv',
-  authCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQR-u2WM7H5JKzDykqVUKb3sCoZ9qNknBA5ZdfutnMYehSaEWaUOHZQrGjWC6-hHXCDhTxf7FMTAd7e/pub?gid=1397868653&single=true&output=csv',
+  dataCsvUrl: '/api/data',
+  authCsvUrl: '/api/auth',
   fallbackPassword: 'veredas2026',
   localFallbackUrl: 'data/veredas.json',
   pageSize: 25
@@ -68,7 +65,7 @@ const getCompanyColor = (company) => COMPANY_COLORS[clean(company).toUpperCase()
 
 async function fetchRemotePassword() {
   try {
-    let url = CFG.authCsvUrl || `https://docs.google.com/spreadsheets/d/${CFG.spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CFG.authSheetName)}`;
+    let url = CFG.authCsvUrl || '/api/auth';
     url += (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -278,7 +275,7 @@ function mapCsvRowToRecord(r, originalIndex) {
 }
 
 async function loadRows() {
-  let url = CFG.dataCsvUrl || `https://docs.google.com/spreadsheets/d/${CFG.spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CFG.dataSheetName)}`;
+  let url = CFG.dataCsvUrl || '/api/data';
   url += (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
   
   try {
