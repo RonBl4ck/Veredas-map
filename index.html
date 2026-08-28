@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0067a7">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Control de Veredas | Pluz Energía</title>
+  
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  
+  <!-- Leaflet & MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  
+  <!-- Estilos Maestros -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Modal de Bloqueo por Contraseña -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-brand">⚡ CONTROL DE VEREDAS</div>
+      <p class="auth-subtitle">Acceso restringido al tablero operativo</p>
+      <form id="authForm" class="auth-form" onsubmit="return false;">
+        <label for="authPassword">Contraseña de acceso
+          <div class="password-wrap">
+            <input id="authPassword" type="password" placeholder="Ingresa la contraseña" autocomplete="current-password" autofocus required>
+            <button type="button" id="btnTogglePwd" class="btn-toggle-pwd" aria-label="Mostrar contraseña">👁</button>
+          </div>
+        </label>
+        <p id="authError" class="auth-error"></p>
+        <button type="submit" id="btnAuthSubmit" class="button auth-btn">Ingresar al tablero</button>
+      </form>
+      <div class="auth-footer">
+        <span>Sistema de Gestión de Órdenes SAP - EBT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra Superior de Navegación -->
+  <nav class="top-nav">
+    <b class="brand-title">⚡ CONTROL DE VEREDAS</b>
+    <div class="nav-links">
+      <button type="button" class="nav-tab active" data-page="pageMap">🗺️ Mapa General</button>
+      <button type="button" class="nav-tab" data-page="pagePendientes">⌛ Indicadores Pendientes</button>
+      <button type="button" class="nav-tab" data-page="pageEjecutados">✓ Indicadores Ejecutados</button>
+    </div>
+    <div class="nav-right">
+      <span id="lastUpdate" class="update-chip" title="Estado de la conexión">Cargando datos…</span>
+      <button id="btnLogout" class="btn-logout" title="Cerrar sesión">Salir</button>
+    </div>
+  </nav>
+
+  <!-- ========================================================= -->
+  <!-- VISTA 1: MAPA EN PANTALLA COMPLETA                        -->
+  <!-- ========================================================= -->
+  <main id="pageMap" class="page-view active">
+    <div class="map-viewport">
+      <div id="map"></div>
+
+      <!-- Leyenda flotante en el mapa -->
+      <aside class="map-legend">
+        <b>Leyenda Operativa</b>
+        <div class="legend-types">
+          <span>🚚 BT / MT</span>
+          <span>💡 AP (Alumbrado)</span>
+        </div>
+        <hr class="legend-sep">
+        <div id="legendCompanies" class="legend-companies">
+          <!-- Generado dinámicamente -->
+        </div>
+      </aside>
+
+      <!-- Panel Flotante de Filtros del Mapa -->
+      <aside class="map-filters-panel">
+        <div class="panel-head">
+          <b>Filtros del Mapa</b>
+          <span id="mapStatusChip" class="badge-chip">0 órdenes</span>
+        </div>
+        
+        <!-- 1. Filtrado de órdenes -->
+        <label>Filtrar órdenes o SED
+          <input id="mapSearchInput" type="search" placeholder="Ej: 600181621 o 06266C">
+        </label>
+
+        <!-- 2. Buscador de calle/dirección independiente -->
+        <label>Ubicar calle o dirección
+          <div class="address-input-wrap">
+            <input id="mapAddressInput" type="search" placeholder="Ej: Av. Larco, Miraflores">
+            <button id="btnMapSearchAddress" type="button" class="btn-address-go" title="Buscar y centrar">📍</button>
+          </div>
+        </label>
+        <button id="btnClearAddressPin" type="button" class="btn-link-sm" style="display:none">✕ Quitar marcador de calle</button>
+
+        <!-- 3. Rango de Fechas -->
+        <label class="section-label">Rango de Fechas</label>
+        <div class="date-range-grid">
+          <label class="sub-label">Desde
+            <input id="mapDateFrom" type="date">
+          </label>
+          <label class="sub-label">Hasta
+            <input id="mapDateTo" type="date">
+          </label>
+        </div>
+
+        <label>Estado
+          <select id="mapFilterTipo">
+            <option value="">Todos (Pendientes + Ejecutados)</option>
+            <option value="Pendiente" selected>Solo Pendientes</option>
+            <option value="Ejecutado">Solo Ejecutados</option>
+          </select>
+        </label>
+
+        <label>Contratista
+          <select id="mapFilterContratista"><option value="">Todos los contratistas</option></select>
+        </label>
+
+        <label>Nivel de Tensión
+          <select id="mapFilterTension"><option value="">Todos los niveles</option></select>
+        </label>
+
+        <label>Distrito
+          <select id="mapFilterDistrito"><option value="">Todos los distritos</option></select>
+        </label>
+
+        <div class="map-actions">
+          <button id="btnResetMapFilters" type="button" class="btn-secondary-sm">Limpiar filtros</button>
+          <button id="btnFitMapBounds" type="button" class="btn-primary-sm">Centrar órdenes</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- ========================================================= -->
+  <!-- VISTA 2: INDICADORES DE PENDIENTES                        -->
+  <!-- ========================================================= -->
+  <main id="pagePendientes" class="page-view">
+    <div class="report-layout">
+      
+      <!-- Contenido Principal del Dashboard -->
+      <section class="report-main">
+        <div class="report-hero pendiente-hero">
+          <div>
+            <p class="eyebrow">TABLERO DE GESTIÓN OPERATIVA</p>
+            <h2>Órdenes Pendientes de Veredas</h2>
+            <p class="subtitle">Supervisión, tiempos de atención y distribución geográfica de órdenes en gestión.</p>
+          </div>
+          <div class="hero-status">
+            <i class="status-dot"></i>
+            <span id="kpiHeroStatusPendiente">Datos SAP en vivo</span>
+          </div>
+        </div>
+
+        <!-- KPIs Cards -->
+        <div class="kpi-grid">
+          <article class="kpi-card kpi-total">
+            <div class="kpi-icon">📋</div>
+            <div>
+              <span>TOTAL PENDIENTES</span>
+              <strong id="kpiTotalPendiente">0</strong>
+              <small>órdenes activas</small>
+            </div>
+          </article>
+          <article class="kpi-card kpi-bt">
+            <div class="kpi-icon">⚡</div>
+            <div>
+              <span>BAJA TENSIÓN (BT)</span>
+              <strong id="kpiBtPendiente">0</strong>
+              <small>red de distribución</small>
+            </div>
+          </article>
+          <article class="kpi-card kpi-mt">
+            <div class="kpi-icon">🔌</div>
+            <div>
+              <span>MEDIA TENSIÓN (MT)</span>
+              <strong id="kpiMtPendiente">0</strong>
+              <small>alimentadores / SEDs</small>
+            </div>
+          </article>
+          <article class="kpi-card kpi-ap">
+            <div class="kpi-icon">💡</div>
+            <div>
+              <span>ALUMBRADO (AP)</span>
+              <strong id="kpiApPendiente">0</strong>
+              <small>alumbrado público</small>
+            </div>
+          </article>
+        </div>
+
+        <!-- Gráficos de Indicadores (Chart.js) -->
+        <div class="dashboard-charts">
+          <div class="chart-card chart-company">
+            <div class="chart-title">
+              <div><b>Contratistas</b><span>Distribución de órdenes</span></div>
+              <span class="chart-badge">Empresas</span>
+            </div>
+            <div class="chart-container"><canvas id="chartCompanyPendiente"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-voltage">
+            <div class="chart-title">
+              <div><b>Nivel de Tensión</b><span>Composición operativa</span></div>
+              <span class="chart-badge">Tensión</span>
+            </div>
+            <div class="chart-container"><canvas id="chartVoltagePendiente"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-day wide-chart">
+            <div class="chart-title">
+              <div><b>Creación Diaria de Órdenes</b><span>Evolución cronológica</span></div>
+              <span class="chart-badge">Línea de tiempo</span>
+            </div>
+            <div class="chart-container"><canvas id="chartDayPendiente"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-district">
+            <div class="chart-title">
+              <div><b>Distritos con Mayor Carga</b><span>Concentración territorial</span></div>
+              <span class="chart-badge">Top distritos</span>
+            </div>
+            <div class="chart-container"><canvas id="chartDistrictPendiente"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-interval">
+            <div class="chart-title">
+              <div><b>Antigüedad de Órdenes</b><span>Tiempos de permanencia</span></div>
+              <span class="chart-badge">Intervalos</span>
+            </div>
+            <div class="chart-container"><canvas id="chartIntervalPendiente"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Barra de Herramientas y Tabla -->
+        <div class="table-toolbar">
+          <div>
+            <strong>Detalle de Órdenes Pendientes</strong>
+            <span id="tableCountPendiente">Mostrando registros filtrados</span>
+          </div>
+          <div class="table-toolbar-actions">
+            <input type="search" id="tableSearchPendiente" class="table-search-input" placeholder="Buscar en tabla…">
+            <button type="button" class="btn-primary-sm" onclick="downloadCurrentTable('Pendiente')">📥 Descargar CSV</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="tablePendiente">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="idx" onclick="handleTableSort('Pendiente', 'idx')"># <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="estado_original" onclick="handleTableSort('Pendiente', 'estado_original')">Estado SAP <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="orden" onclick="handleTableSort('Pendiente', 'orden')">Orden <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="orden_sistema_origen" onclick="handleTableSort('Pendiente', 'orden_sistema_origen')">Orden Origen <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="sed" onclick="handleTableSort('Pendiente', 'sed')">SED <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="contratista" onclick="handleTableSort('Pendiente', 'contratista')">Contratista <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="distrito" onclick="handleTableSort('Pendiente', 'distrito')">Distrito <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="tension" onclick="handleTableSort('Pendiente', 'tension')">Tensión <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="fecha_inicio" onclick="handleTableSort('Pendiente', 'fecha_inicio')">Creación <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="intervalo" onclick="handleTableSort('Pendiente', 'intervalo')">Antigüedad <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="ubicacion_tecnica" onclick="handleTableSort('Pendiente', 'ubicacion_tecnica')">Ubicación Técnica <span class="sort-icon"></span></th>
+              </tr>
+            </thead>
+            <tbody id="tableBodyPendiente"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="paginationPendiente"></div>
+      </section>
+
+      <!-- Barra Lateral de Filtros Interactivos (Derecha) -->
+      <aside class="filter-sidebar">
+        <div class="filter-sidebar-head">
+          <div>
+            <b>Filtros de Indicadores</b>
+            <small id="activeFilterCountPendiente">Sin filtros activos</small>
+          </div>
+          <button type="button" class="link-btn" onclick="resetReportFilters('Pendiente')">Restablecer</button>
+        </div>
+
+        <!-- Filtro Rango de Fechas -->
+        <div class="filter-group">
+          <label>Rango de Fechas (Creación)</label>
+          <div class="date-range-grid">
+            <label class="sub-label">Desde
+              <input id="repDateFromPendiente" type="date" onchange="applyReportFilters('Pendiente')">
+            </label>
+            <label class="sub-label">Hasta
+              <input id="repDateToPendiente" type="date" onchange="applyReportFilters('Pendiente')">
+            </label>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Contratista
+            <select id="repFilterCompanyPendiente" onchange="applyReportFilters('Pendiente')">
+              <option value="">Todos los contratistas</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Nivel de Tensión
+            <select id="repFilterTensionPendiente" onchange="applyReportFilters('Pendiente')">
+              <option value="">Todos los niveles</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Distrito
+            <select id="repFilterDistrictPendiente" onchange="applyReportFilters('Pendiente')">
+              <option value="">Todos los distritos</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Antigüedad
+            <select id="repFilterIntervalPendiente" onchange="applyReportFilters('Pendiente')">
+              <option value="">Todos los intervalos</option>
+              <option value="0 a 2 dias">0 a 2 días</option>
+              <option value="3 a 7 dias">3 a 7 días</option>
+              <option value="8 a 15 dias">8 a 15 días</option>
+              <option value="15 a mas">15 a más días</option>
+            </select>
+          </label>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- ========================================================= -->
+  <!-- VISTA 3: INDICADORES DE EJECUTADOS                        -->
+  <!-- ========================================================= -->
+  <main id="pageEjecutados" class="page-view">
+    <div class="report-layout">
+      
+      <!-- Contenido Principal del Dashboard -->
+      <section class="report-main">
+        <div class="report-hero ejecutado-hero">
+          <div>
+            <p class="eyebrow">HISTORIAL Y ATENCIÓN</p>
+            <h2>Órdenes Ejecutadas de Veredas</h2>
+            <p class="subtitle">Análisis de trabajos concluidos, volumen por contratista y desempeño distrital.</p>
+          </div>
+          <div class="hero-status">
+            <i class="status-dot green"></i>
+            <span id="kpiHeroStatusEjecutado">Concluidas</span>
+          </div>
+        </div>
+
+        <!-- KPIs Cards -->
+        <div class="kpi-grid">
+          <article class="kpi-card kpi-total">
+            <div class="kpi-icon">✓</div>
+            <div>
+              <span>TOTAL EJECUTADOS</span>
+              <strong id="kpiTotalEjecutado">0</strong>
+              <small>órdenes cerradas</small>
+            </div>
+          </article>
+          <article class="kpi-card kpi-bt">
+            <div class="kpi-icon">⚡</div>
+            <div>
+              <span>BAJA TENSIÓN (BT)</span>
+              <strong id="kpiBtEjecutado">0</strong>
+              <small>red de distribución</small>
+            </div>
+          </article>
+          <article class="kpi-card kpi-mt">
+            <div class="kpi-icon">🔌</div>
+            <div>
+              <span>MEDIA TENSIÓN (MT)</span>
+              <strong id="kpiMtEjecutado">0</strong>
+              <small>alimentadores / SEDs</small>
+            </div>
+          </article>
+          <article class="kpi-card kpi-ap">
+            <div class="kpi-icon">💡</div>
+            <div>
+              <span>ALUMBRADO (AP)</span>
+              <strong id="kpiApEjecutado">0</strong>
+              <small>alumbrado público</small>
+            </div>
+          </article>
+        </div>
+
+        <!-- Gráficos de Indicadores (Chart.js) -->
+        <div class="dashboard-charts">
+          <div class="chart-card chart-company">
+            <div class="chart-title">
+              <div><b>Contratistas</b><span>Órdenes concluidas</span></div>
+              <span class="chart-badge">Empresas</span>
+            </div>
+            <div class="chart-container"><canvas id="chartCompanyEjecutado"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-voltage">
+            <div class="chart-title">
+              <div><b>Nivel de Tensión</b><span>Cierre operativo</span></div>
+              <span class="chart-badge">Tensión</span>
+            </div>
+            <div class="chart-container"><canvas id="chartVoltageEjecutado"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-day wide-chart">
+            <div class="chart-title">
+              <div><b>Fecha de Cierre / Creación</b><span>Tendencia de atención</span></div>
+              <span class="chart-badge">Línea de tiempo</span>
+            </div>
+            <div class="chart-container"><canvas id="chartDayEjecutado"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-district">
+            <div class="chart-title">
+              <div><b>Distritos Atendidos</b><span>Distribución de cierres</span></div>
+              <span class="chart-badge">Distritos</span>
+            </div>
+            <div class="chart-container"><canvas id="chartDistrictEjecutado"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-interval">
+            <div class="chart-title">
+              <div><b>Tiempo de Atención</b><span>Duración hasta el cierre</span></div>
+              <span class="chart-badge">Intervalos</span>
+            </div>
+            <div class="chart-container"><canvas id="chartIntervalEjecutado"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Barra de Herramientas y Tabla -->
+        <div class="table-toolbar">
+          <div>
+            <strong>Detalle de Órdenes Ejecutadas</strong>
+            <span id="tableCountEjecutado">Mostrando registros filtrados</span>
+          </div>
+          <div class="table-toolbar-actions">
+            <input type="search" id="tableSearchEjecutado" class="table-search-input" placeholder="Buscar en tabla…">
+            <button type="button" class="btn-primary-sm" onclick="downloadCurrentTable('Ejecutado')">📥 Descargar CSV</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="tableEjecutado">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="idx" onclick="handleTableSort('Ejecutado', 'idx')"># <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="estado_original" onclick="handleTableSort('Ejecutado', 'estado_original')">Estado SAP <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="orden" onclick="handleTableSort('Ejecutado', 'orden')">Orden <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="orden_sistema_origen" onclick="handleTableSort('Ejecutado', 'orden_sistema_origen')">Orden Origen <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="sed" onclick="handleTableSort('Ejecutado', 'sed')">SED <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="contratista" onclick="handleTableSort('Ejecutado', 'contratista')">Contratista <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="distrito" onclick="handleTableSort('Ejecutado', 'distrito')">Distrito <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="tension" onclick="handleTableSort('Ejecutado', 'tension')">Tensión <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="fecha_fin" onclick="handleTableSort('Ejecutado', 'fecha_fin')">Fecha Fin Real <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="intervalo" onclick="handleTableSort('Ejecutado', 'intervalo')">Duración <span class="sort-icon"></span></th>
+                <th class="sortable" data-sort="ubicacion_tecnica" onclick="handleTableSort('Ejecutado', 'ubicacion_tecnica')">Ubicación Técnica <span class="sort-icon"></span></th>
+              </tr>
+            </thead>
+            <tbody id="tableBodyEjecutado"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="paginationEjecutado"></div>
+      </section>
+
+      <!-- Barra Lateral de Filtros Interactivos (Derecha) -->
+      <aside class="filter-sidebar">
+        <div class="filter-sidebar-head">
+          <div>
+            <b>Filtros de Indicadores</b>
+            <small id="activeFilterCountEjecutado">Sin filtros activos</small>
+          </div>
+          <button type="button" class="link-btn" onclick="resetReportFilters('Ejecutado')">Restablecer</button>
+        </div>
+
+        <!-- Filtro Rango de Fechas -->
+        <div class="filter-group">
+          <label>Rango de Fechas (Cierre / Fin)</label>
+          <div class="date-range-grid">
+            <label class="sub-label">Desde
+              <input id="repDateFromEjecutado" type="date" onchange="applyReportFilters('Ejecutado')">
+            </label>
+            <label class="sub-label">Hasta
+              <input id="repDateToEjecutado" type="date" onchange="applyReportFilters('Ejecutado')">
+            </label>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Contratista
+            <select id="repFilterCompanyEjecutado" onchange="applyReportFilters('Ejecutado')">
+              <option value="">Todos los contratistas</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Nivel de Tensión
+            <select id="repFilterTensionEjecutado" onchange="applyReportFilters('Ejecutado')">
+              <option value="">Todos los niveles</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Distrito
+            <select id="repFilterDistrictEjecutado" onchange="applyReportFilters('Ejecutado')">
+              <option value="">Todos los distritos</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <label>Filtrar Duración
+            <select id="repFilterIntervalEjecutado" onchange="applyReportFilters('Ejecutado')">
+              <option value="">Todos los intervalos</option>
+              <option value="0 a 2 dias">0 a 2 días</option>
+              <option value="3 a 7 dias">3 a 7 días</option>
+              <option value="8 a 15 dias">8 a 15 días</option>
+              <option value="15 a mas">15 a más días</option>
+            </select>
+          </label>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Librerías Externas -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+  <!-- Configuración y Lógica de Aplicación -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
