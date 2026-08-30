@@ -19,11 +19,11 @@ const CFG = window.APP_CONFIG || {
 };
 
 const COMPANY_COLORS = {
-  LARI: '#F6C515',
-  PA: '#0067A7',
-  COBRA: '#35A853',
-  DOMINION: '#F3A51B',
-  INMEL: '#8B5CF6'
+  LARI: '#F8B319',     // Amarillo Solar Pluz
+  PA: '#1B4E9B',       // Azul Cobalto Pluz
+  COBRA: '#4DA338',    // Verde Energía Pluz
+  DOMINION: '#EA580C', // Naranja Operativo
+  INMEL: '#7C3AED'     // Violeta
 };
 
 const INTERVAL_ORDER = ['0 a 2 dias', '3 a 7 dias', '8 a 15 dias', '15 a mas', 'Sin intervalo'];
@@ -554,6 +554,7 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
   if (!ctx) return;
 
   const isHorizontalBar = type === 'bar' && options.indexAxis === 'y';
+  const defaultColors = ['#1B4E9B', '#F8B319', '#4DA338', '#0284C7', '#EA580C', '#7C3AED'];
 
   chartsInst[canvasId] = new Chart(ctx, {
     type: type,
@@ -561,13 +562,15 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
       labels: labels,
       datasets: [{
         data: data,
-        backgroundColor: options.backgroundColor || (type === 'bar' ? ['#0067A7', '#1487C9', '#35A853', '#F6C515', '#F3A51B', '#8B5CF6'] : 'rgba(0, 103, 167, 0.12)'),
-        borderColor: options.borderColor || '#0067A7',
-        borderWidth: type === 'line' ? 3 : 1,
+        backgroundColor: options.backgroundColor || (type === 'bar' ? defaultColors : 'rgba(27, 78, 155, 0.10)'),
+        borderColor: options.borderColor || '#1B4E9B',
+        borderWidth: type === 'line' ? 2.5 : 0,
+        borderRadius: type === 'bar' ? 6 : 0,
         fill: type === 'line',
-        tension: 0.25,
+        tension: 0.3,
         pointRadius: type === 'line' ? 4 : 0,
-        pointHoverRadius: type === 'line' ? 6 : 0
+        pointHoverRadius: type === 'line' ? 6 : 0,
+        pointBackgroundColor: type === 'line' ? '#1B4E9B' : undefined
       }]
     },
     plugins: [ChartDataLabels],
@@ -578,22 +581,22 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
         legend: { display: false },
         datalabels: {
           display: true,
-          color: type === 'bar' ? (isHorizontalBar ? '#17384D' : '#ffffff') : '#17384D',
-          font: { weight: 'bold', size: 10 },
+          color: type === 'bar' ? (isHorizontalBar ? '#0F2338' : '#ffffff') : '#0F2338',
+          font: { weight: '800', size: 10, family: "'Plus Jakarta Sans', sans-serif" },
           anchor: isHorizontalBar ? 'end' : (type === 'line' ? 'end' : 'center'),
           align: isHorizontalBar ? 'right' : (type === 'line' ? 'top' : 'center'),
           formatter: (v) => (v > 0 ? v.toLocaleString('es-PE') : '')
         }
       },
       scales: isHorizontalBar ? {
-        x: { beginAtZero: true, grid: { display: true }, ticks: { precision: 0 } },
-        y: { grid: { display: false } }
+        x: { beginAtZero: true, grid: { color: '#E2E8F0', drawBorder: false }, ticks: { precision: 0, font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 } } },
+        y: { grid: { display: false }, ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 10, weight: '700' } } }
       } : type === 'bar' ? {
-        x: { grid: { display: false } },
-        y: { beginAtZero: true, grid: { display: true }, ticks: { precision: 0 } }
+        x: { grid: { display: false }, ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 10, weight: '700' } } },
+        y: { beginAtZero: true, grid: { color: '#E2E8F0', drawBorder: false }, ticks: { precision: 0, font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 } } }
       } : type === 'line' ? {
-        x: { ticks: { autoSkip: true, maxTicksLimit: 20 }, grid: { display: false } },
-        y: { beginAtZero: true, grid: { display: true }, ticks: { precision: 0 } }
+        x: { ticks: { autoSkip: true, maxTicksLimit: 16, font: { family: "'Plus Jakarta Sans', sans-serif", size: 9 } }, grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: '#E2E8F0', drawBorder: false }, ticks: { precision: 0, font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 } } }
       } : {}
     }, options)
   });
@@ -726,8 +729,8 @@ function updateReportView(tipo) {
     sortedDays.map(x => x[0]),
     sortedDays.map(x => x[1]),
     {
-      borderColor: tipo === 'Pendiente' ? '#F3A51B' : '#35A853',
-      backgroundColor: tipo === 'Pendiente' ? 'rgba(243, 165, 27, 0.12)' : 'rgba(53, 168, 83, 0.12)'
+      borderColor: tipo === 'Pendiente' ? '#F8B319' : '#4DA338',
+      backgroundColor: tipo === 'Pendiente' ? 'rgba(248, 179, 25, 0.12)' : 'rgba(77, 163, 56, 0.12)'
     }
   );
 
@@ -778,18 +781,33 @@ function renderReportTable(tipo, filtered) {
 
   pageRows.forEach((r, idx) => {
     const tr = document.createElement('tr');
+    
+    let estadoBadge = escapeHtml(r.estado_original);
+    const estUpper = clean(r.estado_original).toUpperCase();
+    if (estUpper === 'CER') {
+      estadoBadge = `<span class="badge-status-sap badge-sap-cer">CER</span>`;
+    } else if (estUpper === 'LIB') {
+      estadoBadge = `<span class="badge-status-sap badge-sap-lib">LIB</span>`;
+    } else if (estUpper === 'ABI') {
+      estadoBadge = `<span class="badge-status-sap badge-sap-abi">ABI</span>`;
+    } else if (r.estado_original) {
+      estadoBadge = `<span class="badge-status-sap badge-sap-lib">${escapeHtml(r.estado_original)}</span>`;
+    }
+
+    const tensionBadge = r.tension ? `<span class="badge-tension">${escapeHtml(r.tension)}</span>` : '-';
+
     tr.innerHTML = `
-      <td>${start + idx + 1}</td>
-      <td><b>${escapeHtml(r.estado_original)}</b></td>
-      <td><b>${escapeHtml(r.orden)}</b></td>
-      <td>${escapeHtml(r.orden_sistema_origen || '-')}</td>
-      <td><b>${escapeHtml(r.sed)}</b></td>
-      <td><span style="color:${getCompanyColor(r.contratista)};font-weight:bold">${escapeHtml(r.contratista)}</span></td>
+      <td style="font-weight:700;color:var(--text-muted)">${start + idx + 1}</td>
+      <td>${estadoBadge}</td>
+      <td><strong style="color:var(--pluz-blue);font-size:12.5px">${escapeHtml(r.orden)}</strong></td>
+      <td style="color:var(--text-secondary)">${escapeHtml(r.orden_sistema_origen || '-')}</td>
+      <td><b style="color:var(--text-main)">${escapeHtml(r.sed)}</b></td>
+      <td><span style="color:${getCompanyColor(r.contratista)};font-weight:800">${escapeHtml(r.contratista)}</span></td>
       <td>${escapeHtml(r.distrito)}</td>
-      <td>${escapeHtml(r.tension)}</td>
+      <td>${tensionBadge}</td>
       <td>${escapeHtml(tipo === 'Ejecutado' ? r.fecha_fin : r.fecha_inicio)}</td>
-      <td>${escapeHtml(r.intervalo || '-')}</td>
-      <td><small>${escapeHtml(r.ubicacion_tecnica || '-')}</small></td>
+      <td style="font-weight:600">${escapeHtml(r.intervalo || '-')}</td>
+      <td><small style="color:var(--text-secondary)">${escapeHtml(r.ubicacion_tecnica || '-')}</small></td>
     `;
     tbody.appendChild(tr);
   });
@@ -798,7 +816,7 @@ function renderReportTable(tipo, filtered) {
   const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
   $(`pagination${tipo}`).innerHTML = `
     <button class="btn-secondary-sm" ${state.page <= 1 ? 'disabled' : ''} onclick="changeReportPage('${tipo}', -1)">◀ Anterior</button>
-    <span>Página ${state.page} de ${totalPages}</span>
+    <span style="font-weight:700;color:var(--text-secondary);padding:0 8px">Página <b style="color:var(--pluz-blue)">${state.page}</b> de <b>${totalPages}</b></span>
     <button class="btn-secondary-sm" ${state.page >= totalPages ? 'disabled' : ''} onclick="changeReportPage('${tipo}', 1)">Siguiente ▶</button>
   `;
 }
