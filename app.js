@@ -1,3 +1,7 @@
+import { initAuth as initAuthModule } from './js/auth.js';
+import { bindDashboardActions } from './js/dashboard-actions.js';
+import { byId } from './js/dom.js';
+
 /**
  * Aplicación Frontend - Control de Veredas
  * Pluz Energía / SAP IW39
@@ -61,7 +65,7 @@ const obrasState = {
   filters: { source: '', company: '', district: '', geo: '' }
 };
 
-const $ = (id) => document.getElementById(id);
+const $ = byId;
 const clean = (val) => String(val ?? '').trim();
 const escapeHtml = (val) => clean(val).replace(/[&<>'"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[c]));
 const getCompanyColor = (company) => {
@@ -71,83 +75,6 @@ const getCompanyColor = (company) => {
   const hash = [...normalized].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 0);
   return `hsl(${hash % 360} 58% 43%)`;
 };
-
-// =============================================================
-// 1. MÓDULO DE AUTENTICACIÓN (Google Sheets / Session)
-// =============================================================
-
-/* Removed insecure browser-side password retrieval.
-async function fetchRemotePassword() {
-  try {
-    let url = CFG.authCsvUrl || '/api/auth';
-    url += (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const rows = parseCsv(text);
-    for (const r of rows) {
-      const key = clean(r.PARAMETRO || r.parametro || Object.values(r)[0]).toUpperCase();
-      const val = clean(r.VALOR || r.valor || Object.values(r)[1]);
-      if (key.includes('PASS') || key.includes('CLAVE') || key.includes('ACCESO')) {
-        if (val) {
-          currentPassword = val;
-          break;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('No se pudo cargar contraseña remota; usando fallback.', err);
-    currentPassword = CFG.fallbackPassword;
-  }
-}
-
-*/
-async function initAuth() {
-  const authCheck = await fetch(CFG.authUrl || '/api/auth', { cache: 'no-store' });
-  const { authenticated: isAuth } = authCheck.ok ? await authCheck.json() : { authenticated: false };
-  const overlay = $('authOverlay');
-  const errorEl = $('authError');
-  const passInput = $('authPassword');
-  const toggleBtn = $('btnTogglePwd');
-  const logoutBtn = $('btnLogout');
-
-  if (isAuth) {
-    overlay.classList.add('hidden');
-    initApp();
-  } else {
-    overlay.classList.remove('hidden');
-    passInput.focus();
-  }
-
-  toggleBtn.addEventListener('click', () => {
-    const isPass = passInput.type === 'password';
-    passInput.type = isPass ? 'text' : 'password';
-    toggleBtn.textContent = isPass ? '🔒' : '👁';
-  });
-
-  $('authForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorEl.textContent = 'Verificando…';
-    const response = await fetch(CFG.authUrl || '/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: passInput.value })
-    });
-    if (response.ok) {
-      overlay.classList.add('hidden');
-      errorEl.textContent = '';
-      initApp();
-    } else {
-      errorEl.textContent = 'Contraseña incorrecta. Inténtalo de nuevo.';
-      passInput.value = '';
-      passInput.focus();
-    }
-  });
-
-  logoutBtn.addEventListener('click', () => {
-    fetch(CFG.authUrl || '/api/auth', { method: 'DELETE' }).finally(() => location.reload());
-  });
-}
 
 // =============================================================
 // 2. PARSER Y CARGA DE DATOS (Google Sheets CSV / Local JSON)
@@ -1280,6 +1207,7 @@ function setupNavigation() {
 async function initApp() {
   try {
     setupNavigation();
+    bindDashboardActions({ setSlaFilter, downloadCurrentTable });
     initMap();
     allRows = await loadRows();
     obrasRows = await loadObrasRows();
@@ -1305,8 +1233,21 @@ async function initApp() {
 
 // Arranque inicial
 document.addEventListener('DOMContentLoaded', () => {
-  initAuth().catch((err) => {
+  initAuthModule({ authUrl: CFG.authUrl, onAuthenticated: initApp }).catch((err) => {
     console.error('No se pudo iniciar la autenticacion:', err);
     $('authError').textContent = 'No se pudo validar la sesion. Intenta nuevamente.';
   });
+});
+
+// Compatibilidad temporal: los controles que aún están en el HTML siguen
+// funcionando mientras se migran por grupos a listeners externos.
+Object.assign(window, {
+  applyObrasFilters,
+  applyReportFilters,
+  changeObrasPage,
+  changeReportPage,
+  downloadCurrentTable,
+  handleTableSort,
+  resetObrasFilters,
+  resetReportFilters
 });

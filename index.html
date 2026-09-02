@@ -246,7 +246,7 @@
               <span class="kpi-foot">Veredas de alumbrado</span>
             </div>
           </article>
-          <article class="kpi-card kpi-due-soon" onclick="setSlaFilter('urgente')" title="Filtrar órdenes que vencen en las próximas 24 horas">
+          <article id="kpiDueSoonPendiente" class="kpi-card kpi-due-soon" title="Filtrar órdenes que vencen en las próximas 24 horas">
             <div class="kpi-icon-wrap icon-due-soon">⌛</div>
             <div class="kpi-data">
               <span class="kpi-label">VENCEN EN 24 H</span>
@@ -325,7 +325,7 @@
                 <span class="search-lens">🔍</span>
                 <input type="search" id="tableSearchPendiente" class="table-search-input" placeholder="Buscar orden, SED, distrito…">
               </div>
-              <button type="button" class="btn-download" onclick="downloadCurrentTable('Pendiente')">
+              <button id="btnDownloadPendiente" type="button" class="btn-download">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <span>Descargar CSV</span>
               </button>
@@ -336,9 +336,9 @@
             <table id="tablePendiente">
               <thead>
                 <tr>
-                  <th class="sortable th-idx" data-sort="idx" onclick="handleTableSort('Pendiente', 'idx')"># <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="estado_original" onclick="handleTableSort('Pendiente', 'estado_original')">Estado SAP <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="orden" onclick="handleTableSort('Pendiente', 'orden')">Orden <span class="sort-icon"></span></th>
+                  <th class="sortable th-idx" data-sort="idx"># <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="estado_original">Estado SAP <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="orden">Orden <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="orden_sistema_origen" onclick="handleTableSort('Pendiente', 'orden_sistema_origen')">Orden Origen <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="sed" onclick="handleTableSort('Pendiente', 'sed')">SED <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="contratista" onclick="handleTableSort('Pendiente', 'contratista')">Contratista <span class="sort-icon"></span></th>
@@ -364,7 +364,7 @@
             <b>Filtros de Indicadores</b>
             <span id="activeFilterCountPendiente" class="active-filters-desc">Sin filtros activos</span>
           </div>
-          <button type="button" class="link-btn-reset" onclick="resetReportFilters('Pendiente')">Restablecer</button>
+          <button id="btnResetPendiente" type="button" class="link-btn-reset">Restablecer</button>
         </div>
 
         <!-- Filtro Rango de Fechas -->
@@ -697,6 +697,6 @@
 
   <!-- Configuración y Lógica de Aplicación -->
   <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
