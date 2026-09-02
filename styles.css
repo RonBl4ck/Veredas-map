@@ -642,6 +642,14 @@ html, body {
   border-left: 6px solid var(--pluz-green);
 }
 
+.obras-hero {
+  border-left: 6px solid var(--pluz-yellow);
+}
+
+.eyebrow-obras {
+  color: var(--pluz-yellow-dark);
+}
+
 .eyebrow {
   display: block;
   font-size: 10px;
@@ -706,7 +714,7 @@ html, body {
 /* KPI Cards Grid */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -745,6 +753,14 @@ html, body {
 .icon-mt { background: #E0F2FE; color: #0369A1; }
 .icon-ap { background: var(--pluz-green-light); color: var(--pluz-green-dark); }
 .icon-total-ejecutado { background: var(--pluz-green-light); color: var(--pluz-green); font-size: 22px; }
+.icon-due-soon { background: #FFF3E0; color: #C2410C; }
+
+.kpi-due-soon {
+  cursor: pointer;
+  border-color: #FED7AA;
+}
+
+.kpi-due-soon:hover { border-color: #F97316; }
 
 .kpi-data {
   display: flex;
@@ -997,6 +1013,27 @@ tbody tr:nth-child(even) {
 tbody tr:hover {
   background: #F0F6FE;
 }
+
+tbody tr.sla-vencida td:first-child { box-shadow: inset 4px 0 0 #C62828; }
+tbody tr.sla-critica td:first-child { box-shadow: inset 4px 0 0 #EF6C00; }
+tbody tr.sla-por_vencer td:first-child { box-shadow: inset 4px 0 0 #F9A825; }
+tbody tr.sla-en_plazo td:first-child { box-shadow: inset 4px 0 0 #2E7D32; }
+
+.deadline-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.deadline-en_plazo { background: #E8F5E9; color: #2E7D32; border-color: #C8E6C9; }
+.deadline-por_vencer { background: #FFF8E1; color: #A16207; border-color: #FDE68A; }
+.deadline-critica { background: #FFF3E0; color: #C2410C; border-color: #FED7AA; }
+.deadline-vencida { background: #FDECEC; color: #C62828; border-color: #F5C2C7; }
+.deadline-sin_dato { background: #F1F5F9; color: #64748B; border-color: #CBD5E1; }
 
 .badge-status-sap {
   display: inline-block;
