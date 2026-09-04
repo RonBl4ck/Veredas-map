@@ -63,6 +63,7 @@ const obrasState = {
   pageSize: 50,
   search: '',
   subTab: 'Pendiente', // 'Pendiente' | 'Atendido' | 'Todos'
+  sort: { column: 'idx', direction: 'asc' },
   filters: {
     dateFrom: '',
     dateTo: '',
@@ -282,7 +283,7 @@ function getObrasSla(record) {
       const [ey, em, ed] = endStr.split('-').map(Number);
       targetDate = new Date(ey, em - 1, ed);
     } else {
-      targetDate = startDate;
+      return { status: 'en_plazo', label: 'Atendido', days: 0 };
     }
   } else {
     const now = new Date();
@@ -328,7 +329,10 @@ function mapObrasRow(r, index) {
   const intervalo = clean(r.INTERVALO || r.intervalo);
 
   const rawTipo = clean(r.TIPO || r.tipo).toUpperCase();
-  const isEjecutado = rawTipo === 'EJECUTADO' || Boolean(fechaFin);
+  const estadoUpper = estadoOriginal.toUpperCase();
+  const palabrasAtendido = ['ATENDID', 'EJECUTAD', 'REPARAD', 'CONCLUID', 'FINALIZAD', 'TERMINAD', 'CERRAD', 'RESUELT'];
+  const estadoDiceAtendido = palabrasAtendido.some(p => estadoUpper.includes(p));
+  const isEjecutado = rawTipo === 'EJECUTADO' || rawTipo === 'ATENDIDO' || Boolean(fechaFin) || estadoDiceAtendido;
 
   const record = {
     idx: index + 1,
@@ -422,16 +426,12 @@ function iconSvg(tension, color) {
   return `<svg viewBox="0 0 42 34" aria-label="Camión"><path d="M2 7h25v17H2zM27 13h8l5 6v5H27z" fill="${color}" stroke="#17384D" stroke-width="1.4"/><circle cx="11" cy="28" r="3.5" fill="#17384D"/><circle cx="33" cy="28" r="3.5" fill="#17384D"/><path d="M30 15h4l3 4h-7z" fill="#EAF7FD"/></svg>`;
 }
 
-function worksIconWithSla(color, slaStatus) {
+function wrapMarkerWithHalo(innerSvg, slaStatus) {
   const ringClass = slaStatus ? `sla-ring-${slaStatus}` : 'sla-ring-en_plazo';
   return `
     <div class="works-marker-wrapper ${ringClass}">
       <div class="works-halo-ring"></div>
-      <svg viewBox="0 0 40 34" class="works-helmet-svg" aria-label="Obras">
-        <path d="M8 18c0-7 5.4-12 12-12s12 5 12 12v2H8z" fill="${color}" stroke="#17384D" stroke-width="1.6"/>
-        <path d="M5 21h30v5H5z" fill="${color}" stroke="#17384D" stroke-width="1.6"/>
-        <path d="M20 6v15M11 17h18" stroke="#17384D" stroke-width="1.4"/>
-      </svg>
+      ${innerSvg}
     </div>
   `;
 }
@@ -555,15 +555,37 @@ function renderMap() {
     if (!isPeruCoordinate(r)) return;
 
     const isObra = r.tipo === 'Obras';
-    const slaStatus = isObra ? (r.sla?.status || 'en_plazo') : null;
+    let slaStatus = 'en_plazo';
+
+    if (isObra) {
+      slaStatus = r.sla?.status || 'en_plazo';
+    } else if (r.tipo === 'Pendiente') {
+      const slaInfo = getSlaInfo(r);
+      if (slaInfo.status === 'vencida') {
+        slaStatus = 'vencida';
+      } else if (slaInfo.status === 'critica' || slaInfo.status === 'por_vencer') {
+        slaStatus = 'por_vencer';
+      } else {
+        slaStatus = 'en_plazo';
+      }
+    } else {
+      slaStatus = 'en_plazo';
+    }
+
+    const companyColor = getCompanyColor(r.contratista);
+    const innerSvg = isObra
+      ? `<svg viewBox="0 0 40 34" class="works-helmet-svg" aria-label="Obras">
+          <path d="M8 18c0-7 5.4-12 12-12s12 5 12 12v2H8z" fill="${companyColor}" stroke="#17384D" stroke-width="1.6"/>
+          <path d="M5 21h30v5H5z" fill="${companyColor}" stroke="#17384D" stroke-width="1.6"/>
+          <path d="M20 6v15M11 17h18" stroke="#17384D" stroke-width="1.4"/>
+        </svg>`
+      : iconSvg(r.tension, companyColor);
 
     const icon = L.divIcon({
       className: 'custom-map-icon',
-      html: isObra
-        ? worksIconWithSla(getCompanyColor(r.contratista), slaStatus)
-        : iconSvg(r.tension, getCompanyColor(r.contratista)),
-      iconSize: isObra ? [34, 30] : [32, 28],
-      iconAnchor: isObra ? [17, 24] : [16, 24]
+      html: wrapMarkerWithHalo(innerSvg, slaStatus),
+      iconSize: [36, 32],
+      iconAnchor: [18, 25]
     });
 
     // Anti-solapamiento de coordenadas idénticas (SEDs / misma ubicación)
@@ -597,7 +619,7 @@ function renderMap() {
           ${slaBadgeHtml}
           <div><b>LCL/ODM:</b> ${escapeHtml(r.lcl)}</div>
           <div><b>Estado:</b> ${escapeHtml(r.estado_original || '-')}</div>
-          <div><b>Contratista:</b> <span style="color:${getCompanyColor(r.contratista)};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
+          <div><b>Contratista:</b> <span style="color:${companyColor};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
           <div><b>Distrito:</b> ${escapeHtml(r.distrito)} | <b>Tipo:</b> ${escapeHtml(r.tipo_trabajo || r.tipo_obra || '-')}</div>
           <div><b>Fecha Ingreso:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
           ${r.fecha_fin ? `<div><b>Fecha Atención:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>` : ''}
@@ -611,14 +633,24 @@ function renderMap() {
       return;
     }
 
+    const regularSla = r.tipo === 'Pendiente' ? getSlaInfo(r) : null;
+    const regularSlaBadge = regularSla ? `
+      <div style="margin-bottom:6px">
+        <span class="deadline-badge deadline-${regularSla.status}">
+          ${escapeHtml(regularSla.label)}
+        </span>
+      </div>
+    ` : '';
+
     const popupHtml = `
       <div style="min-width:260px;font-size:12px;line-height:1.4">
         <div style="font-weight:900;color:var(--navy);font-size:14px;margin-bottom:6px">
           ${escapeHtml(r.tipo)}: Orden ${escapeHtml(r.orden)}
         </div>
+        ${regularSlaBadge}
         <div><b>Orden Origen:</b> ${escapeHtml(r.orden_sistema_origen || '-')}</div>
         <div><b>SED:</b> ${escapeHtml(r.sed)} (${escapeHtml(r.distrito)})</div>
-        <div><b>Contratista:</b> <span style="color:${getCompanyColor(r.contratista)};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
+        <div><b>Contratista:</b> <span style="color:${companyColor};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
         <div><b>Tensión:</b> ${escapeHtml(r.tension)} | <b>Estado SAP:</b> ${escapeHtml(r.estado_original)}</div>
         <div><b>Fecha Inicio:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
         <div><b>Fecha Fin Real:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>
@@ -883,7 +915,18 @@ function updateReportView(tipo) {
   $(`kpiBt${tipo}`).textContent = bt.toLocaleString('es-PE');
   $(`kpiMt${tipo}`).textContent = mt.toLocaleString('es-PE');
   $(`kpiAp${tipo}`).textContent = ap.toLocaleString('es-PE');
-  if (tipo === 'Pendiente') $(`kpiDueSoonPendiente`).textContent = dueSoon.toLocaleString('es-PE');
+  if (tipo === 'Pendiente') {
+    const kpiEl = $(`kpiDueSoonPendiente`);
+    if (kpiEl) kpiEl.textContent = dueSoon.toLocaleString('es-PE');
+    const isUrgentActive = state.filters.sla === 'urgente';
+    const card = $('cardDueSoonPendiente');
+    if (card) {
+      card.classList.toggle('active-filter', isUrgentActive);
+      card.title = isUrgentActive
+        ? 'Filtro activo: clic para quitar filtro de órdenes que vencen en 24h'
+        : 'Clic para filtrar órdenes que vencen en las próximas 24 horas';
+    }
+  }
 
   // Contador de filtros activos
   const activeCount = Object.values(state.filters).filter(Boolean).length + (state.search ? 1 : 0);
@@ -1040,7 +1083,11 @@ function resetReportFilters(tipo) {
   $(`repFilterTension${tipo}`).value = '';
   $(`repFilterDistrict${tipo}`).value = '';
   $(`repFilterInterval${tipo}`).value = '';
-  if (tipo === 'Pendiente') $(`repFilterSlaPendiente`).value = '';
+  if (tipo === 'Pendiente') {
+    const filterSla = $(`repFilterSlaPendiente`);
+    if (filterSla) filterSla.value = '';
+    $('cardDueSoonPendiente')?.classList.remove('active-filter');
+  }
   $(`repDateFrom${tipo}`).value = '';
   $(`repDateTo${tipo}`).value = '';
   $(`tableSearch${tipo}`).value = '';
@@ -1094,7 +1141,7 @@ function downloadCurrentTable(tipo) {
 function setSlaFilter(status) {
   const select = $('repFilterSlaPendiente');
   if (!select) return;
-  select.value = status;
+  select.value = select.value === status ? '' : status;
   applyReportFilters('Pendiente');
 }
 
@@ -1239,14 +1286,87 @@ function updateObrasView() {
   renderObrasTable(rows);
 }
 
+function handleObrasSort(column) {
+  if (obrasState.sort.column === column) {
+    obrasState.sort.direction = obrasState.sort.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    obrasState.sort.column = column;
+    obrasState.sort.direction = 'asc';
+  }
+
+  const table = $('tableObras');
+  if (table) {
+    table.querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (th.dataset.sort === column) {
+        th.classList.add(obrasState.sort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+      }
+    });
+  }
+
+  const rows = getFilteredObrasRows();
+  renderObrasTable(rows);
+}
+
+function sortObrasRows(rows, sortConfig) {
+  const { column, direction } = sortConfig;
+  const isAsc = direction === 'asc';
+
+  return [...rows].sort((a, b) => {
+    let valA = a[column];
+    let valB = b[column];
+
+    if (column === 'idx') {
+      return isAsc ? a.idx - b.idx : b.idx - a.idx;
+    }
+
+    if (column === 'lcl' || column === 'orden_sistema_origen') {
+      const numA = parseInt(valA, 10);
+      const numB = parseInt(valB, 10);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return isAsc ? numA - numB : numB - numA;
+      }
+    }
+
+    if (column === 'sla') {
+      const daysA = a.sla?.days ?? -1;
+      const daysB = b.sla?.days ?? -1;
+      return isAsc ? daysA - daysB : daysB - daysA;
+    }
+
+    if (column === 'fecha_inicio') {
+      const dateA = a.fecha_inicio_date || '';
+      const dateB = b.fecha_inicio_date || '';
+      return isAsc ? dateA.localeCompare(dateB) : dateB.localeCompare(dateA);
+    }
+
+    if (column === 'geo') {
+      const geoA = isPeruCoordinate(a) ? 1 : 0;
+      const geoB = isPeruCoordinate(b) ? 1 : 0;
+      return isAsc ? geoA - geoB : geoB - geoA;
+    }
+
+    if (column === 'intervalo') {
+      const daysA = parseInt(valA, 10) || (a.sla?.days ?? 0);
+      const daysB = parseInt(valB, 10) || (b.sla?.days ?? 0);
+      return isAsc ? daysA - daysB : daysB - daysA;
+    }
+
+    const strA = clean(valA).toLowerCase();
+    const strB = clean(valB).toLowerCase();
+    return isAsc ? strA.localeCompare(strB, 'es') : strB.localeCompare(strA, 'es');
+  });
+}
+
 function renderObrasTable(rows) {
   const body = $('tableBodyObras');
   body.innerHTML = '';
-  const totalPages = Math.max(1, Math.ceil(rows.length / obrasState.pageSize));
+  const sorted = sortObrasRows(rows, obrasState.sort);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / obrasState.pageSize));
   obrasState.page = Math.min(obrasState.page, totalPages);
   const start = (obrasState.page - 1) * obrasState.pageSize;
 
-  rows.slice(start, start + obrasState.pageSize).forEach((row, index) => {
+  sorted.slice(start, start + obrasState.pageSize).forEach((row, index) => {
     const tr = document.createElement('tr');
     if (row.sla && row.sla.status === 'vencida') tr.classList.add('sla-vencida');
     else if (row.sla && row.sla.status === 'por_vencer') tr.classList.add('sla-por_vencer');
@@ -1446,6 +1566,7 @@ Object.assign(window, {
   changeReportPage,
   downloadCurrentTable,
   downloadObrasTable,
+  handleObrasSort,
   handleTableSort,
   resetObrasFilters,
   resetReportFilters,

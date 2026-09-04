@@ -111,6 +111,22 @@
           <span class="type-pill">⛑ Obras</span>
         </div>
         <hr class="legend-sep">
+        <div class="legend-subtitle">Semáforo de Plazo (Aro)</div>
+        <div class="legend-companies" style="gap:5px;margin-bottom:4px">
+          <div class="legend-row">
+            <i class="dot" style="background:#10B981;box-shadow:0 0 0 2px #A7F3D0"></i>
+            <span style="font-size:11px">🟢 En plazo</span>
+          </div>
+          <div class="legend-row">
+            <i class="dot" style="background:#F59E0B;box-shadow:0 0 0 2px #FDE68A"></i>
+            <span style="font-size:11px">🟠 Por vencer / Crítico</span>
+          </div>
+          <div class="legend-row">
+            <i class="dot" style="background:#EF4444;box-shadow:0 0 0 2px #FECACA"></i>
+            <span style="font-size:11px">🔴 Vencido</span>
+          </div>
+        </div>
+        <hr class="legend-sep">
         <div class="legend-subtitle">Contratistas</div>
         <div id="legendCompanies" class="legend-companies">
           <!-- Generado dinámicamente -->
@@ -246,12 +262,12 @@
               <span class="kpi-foot">Veredas de alumbrado</span>
             </div>
           </article>
-          <article id="kpiDueSoonPendiente" class="kpi-card kpi-due-soon" title="Filtrar órdenes que vencen en las próximas 24 horas">
+          <article id="cardDueSoonPendiente" class="kpi-card kpi-due-soon" title="Clic para filtrar órdenes que vencen en las próximas 24 horas">
             <div class="kpi-icon-wrap icon-due-soon">⌛</div>
             <div class="kpi-data">
               <span class="kpi-label">VENCEN EN 24 H</span>
               <strong id="kpiDueSoonPendiente" class="kpi-value">0</strong>
-              <span class="kpi-foot">SLA de atención de 48 h</span>
+              <span class="kpi-foot">SLA crítico de 48 h</span>
             </div>
           </article>
         </div>
@@ -751,16 +767,16 @@
             <table id="tableObras">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>LCL/ODM</th>
-                  <th>Plazo (SLA 2d)</th>
-                  <th>Contratista</th>
-                  <th>Distrito</th>
-                  <th>Estado</th>
-                  <th>Tipo Trabajo</th>
-                  <th>Fecha Ingreso</th>
-                  <th>Duración</th>
-                  <th>Georreferencia</th>
+                  <th class="sortable th-idx" data-sort="idx" onclick="handleObrasSort('idx')"># <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="lcl" onclick="handleObrasSort('lcl')">LCL/ODM <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="sla" onclick="handleObrasSort('sla')">Plazo (SLA 2d) <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="contratista" onclick="handleObrasSort('contratista')">Contratista <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="distrito" onclick="handleObrasSort('distrito')">Distrito <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="estado_original" onclick="handleObrasSort('estado_original')">Estado <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="tipo_trabajo" onclick="handleObrasSort('tipo_trabajo')">Tipo Trabajo <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_inicio" onclick="handleObrasSort('fecha_inicio')">Fecha Ingreso <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="intervalo" onclick="handleObrasSort('intervalo')">Duración <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="geo" onclick="handleObrasSort('geo')">Georreferencia <span class="sort-icon"></span></th>
                 </tr>
               </thead>
               <tbody id="tableBodyObras"></tbody>
