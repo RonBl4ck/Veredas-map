@@ -1258,10 +1258,12 @@ function getFilteredObrasRows() {
   return obrasRows.filter(row => {
     // 1. SubTab (Pendiente, Atendido o Todos)
     if (obrasState.subTab === 'Pendiente' && row.is_ejecutado) return false;
-    if (obrasState.subTab === 'Atendido' && !row.is_ejecutado) return false;
+    // Una atención solo es válida visualmente cuando tiene fecha de cierre.
+    // Así se evita que un ingreso se contabilice por error como atención.
+    if (obrasState.subTab === 'Atendido' && (!row.is_ejecutado || !row.fecha_fin_date)) return false;
 
     // 2. Rango de Fechas (Desde / Hasta)
-    const targetDate = (obrasState.subTab === 'Atendido' && row.fecha_fin_date)
+    const targetDate = obrasState.subTab === 'Atendido'
       ? row.fecha_fin_date
       : row.fecha_inicio_date;
     if (dateFrom && targetDate && targetDate < dateFrom) return false;
@@ -1316,8 +1318,8 @@ function updateObrasView() {
 
   // Gráfico 1: Línea de tiempo por fechas (DD/MM)
   const isAtendido = obrasState.subTab === 'Atendido';
-  const getDateLabel = r => formatShortDate(isAtendido && r.fecha_fin ? r.fecha_fin : r.fecha_inicio);
-  const getIsoDate = r => (isAtendido && r.fecha_fin_date ? r.fecha_fin_date : r.fecha_inicio_date) || '';
+  const getDateLabel = r => formatShortDate(isAtendido ? r.fecha_fin : r.fecha_inicio);
+  const getIsoDate = r => isAtendido ? r.fecha_fin_date : r.fecha_inicio_date;
 
   const dayCounts = countObrasBy(rows, getDateLabel);
   delete dayCounts['Sin dato'];
