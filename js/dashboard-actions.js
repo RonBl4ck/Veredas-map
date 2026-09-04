@@ -4,6 +4,6 @@ import { byId } from './dom.js';
 export function bindDashboardActions(actions) {
   const on = (id, event, handler) => byId(id)?.addEventListener(event, handler);
 
-  on('cardDueSoonPendiente', 'click', () => actions.setSlaFilter('urgente'));
+  on('cardDueSoonPendiente', 'click', () => actions.setSlaFilter('por_vencer'));
   on('btnDownloadPendiente', 'click', () => actions.downloadCurrentTable('Pendiente'));
 }

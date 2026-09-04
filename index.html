@@ -262,12 +262,12 @@
               <span class="kpi-foot">Veredas de alumbrado</span>
             </div>
           </article>
-          <article id="cardDueSoonPendiente" class="kpi-card kpi-due-soon" title="Clic para filtrar órdenes que vencen en las próximas 24 horas">
+          <article id="cardDueSoonPendiente" class="kpi-card kpi-due-soon" title="Clic para filtrar órdenes que vencen hoy">
             <div class="kpi-icon-wrap icon-due-soon">⌛</div>
             <div class="kpi-data">
-              <span class="kpi-label">VENCEN EN 24 H</span>
+              <span class="kpi-label">VENCEN HOY</span>
               <strong id="kpiDueSoonPendiente" class="kpi-value">0</strong>
-              <span class="kpi-foot">SLA crítico de 48 h</span>
+              <span class="kpi-foot">SLA de 2 días calendario</span>
             </div>
           </article>
         </div>
@@ -360,9 +360,10 @@
                   <th class="sortable" data-sort="contratista" onclick="handleTableSort('Pendiente', 'contratista')">Contratista <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="distrito" onclick="handleTableSort('Pendiente', 'distrito')">Distrito <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="tension" onclick="handleTableSort('Pendiente', 'tension')">Tensión <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="fecha_inicio" onclick="handleTableSort('Pendiente', 'fecha_inicio')">Creación <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="intervalo" onclick="handleTableSort('Pendiente', 'intervalo')">Antigüedad <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="sla" onclick="handleTableSort('Pendiente', 'sla')">Plazo 48 h <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_inicio" onclick="handleTableSort('Pendiente', 'fecha_inicio')">Fecha ingreso <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_vencimiento_date" onclick="handleTableSort('Pendiente', 'fecha_vencimiento_date')">Vencimiento <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="sla" onclick="handleTableSort('Pendiente', 'sla')">Días transcurridos <span class="sort-icon"></span></th>
+                  <th>Estado de plazo</th>
                   <th class="sortable" data-sort="ubicacion_tecnica" onclick="handleTableSort('Pendiente', 'ubicacion_tecnica')">Ubicación Técnica <span class="sort-icon"></span></th>
                 </tr>
               </thead>
@@ -428,13 +429,11 @@
           </select>
         </div>
         <div class="filter-group">
-          <label for="repFilterSlaPendiente">Situación de plazo (SLA 48 h)</label>
+          <label for="repFilterSlaPendiente">Situación de plazo (SLA 2 días)</label>
           <select id="repFilterSlaPendiente" onchange="applyReportFilters('Pendiente')">
             <option value="">Todas las situaciones</option>
-            <option value="en_plazo">En plazo (más de 24 h)</option>
-            <option value="urgente">Vencen en 24 h</option>
-            <option value="por_vencer">Atención (12 a 24 h)</option>
-            <option value="critica">Crítica (hasta 12 h)</option>
+            <option value="en_plazo">En plazo (días 0 y 1)</option>
+            <option value="por_vencer">Vence hoy (día 2)</option>
             <option value="vencida">Vencidas</option>
           </select>
         </div>
@@ -587,8 +586,10 @@
                   <th class="sortable" data-sort="contratista" onclick="handleTableSort('Ejecutado', 'contratista')">Contratista <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="distrito" onclick="handleTableSort('Ejecutado', 'distrito')">Distrito <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="tension" onclick="handleTableSort('Ejecutado', 'tension')">Tensión <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="fecha_fin" onclick="handleTableSort('Ejecutado', 'fecha_fin')">Fecha Fin Real <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="intervalo" onclick="handleTableSort('Ejecutado', 'intervalo')">Duración <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_inicio" onclick="handleTableSort('Ejecutado', 'fecha_inicio')">Fecha ingreso <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_vencimiento_date" onclick="handleTableSort('Ejecutado', 'fecha_vencimiento_date')">Vencimiento <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="sla" onclick="handleTableSort('Ejecutado', 'sla')">Días transcurridos <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_fin" onclick="handleTableSort('Ejecutado', 'fecha_fin')">Fecha fin real <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="ubicacion_tecnica" onclick="handleTableSort('Ejecutado', 'ubicacion_tecnica')">Ubicación Técnica <span class="sort-icon"></span></th>
                 </tr>
               </thead>
@@ -775,7 +776,8 @@
                   <th class="sortable" data-sort="estado_original" onclick="handleObrasSort('estado_original')">Estado <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="tipo_trabajo" onclick="handleObrasSort('tipo_trabajo')">Tipo Trabajo <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="fecha_inicio" onclick="handleObrasSort('fecha_inicio')">Fecha Ingreso <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="intervalo" onclick="handleObrasSort('intervalo')">Duración <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="fecha_vencimiento_date" onclick="handleObrasSort('fecha_vencimiento_date')">Vencimiento <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="sla" onclick="handleObrasSort('sla')">Días transcurridos <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="geo" onclick="handleObrasSort('geo')">Georreferencia <span class="sort-icon"></span></th>
                 </tr>
               </thead>

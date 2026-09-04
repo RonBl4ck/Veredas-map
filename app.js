@@ -29,7 +29,7 @@ const COMPANY_COLORS = {
 };
 
 const INTERVAL_ORDER = ['0 a 2 dias', '3 a 7 dias', '8 a 15 dias', '15 a mas', 'Sin intervalo'];
-const SLA_HOURS = 48;
+const SLA_DAYS = 2;
 
 // Estado global
 let allRows = [];
@@ -182,22 +182,47 @@ function parseDateOnly(dateStr) {
   return cleanStr;
 }
 
+function dateFromIso(isoDate) {
+  const [year, month, day] = clean(isoDate).split('-').map(Number);
+  return year && month && day ? new Date(year, month - 1, day) : null;
+}
+
+function isoFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function addCalendarDays(isoDate, days) {
+  const date = dateFromIso(isoDate);
+  if (!date) return '';
+  date.setDate(date.getDate() + days);
+  return isoFromDate(date);
+}
+
+function calendarDaysBetween(startIso, endIso) {
+  const start = dateFromIso(startIso);
+  const end = dateFromIso(endIso);
+  if (!start || !end) return null;
+  return Math.max(0, Math.floor((end - start) / (1000 * 60 * 60 * 24)));
+}
+
+function getTodayIso() {
+  return isoFromDate(new Date());
+}
+
 function getSlaInfo(record) {
-  const start = record.fecha_inicio ? new Date(record.fecha_inicio) : null;
-  const calculatedAge = start && !isNaN(start.getTime())
-    ? Math.max(0, Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60)))
-    : null;
-  const ageHours = Number.isFinite(calculatedAge) ? calculatedAge : record.intervalo_hours;
+  const startDate = record.fecha_inicio_date || parseDateOnly(record.fecha_inicio);
+  if (!startDate) return { status: 'sin_dato', daysElapsed: null, dueDate: '', label: 'Sin fecha de ingreso' };
 
-  if (!Number.isFinite(ageHours)) {
-    return { status: 'sin_dato', remainingHours: null, label: 'Sin dato de plazo' };
-  }
+  const dueDate = record.fecha_vencimiento_date || addCalendarDays(startDate, SLA_DAYS);
+  const referenceDate = record.tipo === 'Ejecutado' && record.fecha_fin_date
+    ? record.fecha_fin_date
+    : getTodayIso();
+  const daysElapsed = calendarDaysBetween(startDate, referenceDate);
+  if (!Number.isFinite(daysElapsed)) return { status: 'sin_dato', daysElapsed: null, dueDate, label: 'Sin fecha válida' };
 
-  const remainingHours = SLA_HOURS - ageHours;
-  if (remainingHours <= 0) return { status: 'vencida', remainingHours, label: `Vencida hace ${Math.abs(remainingHours)} h` };
-  if (remainingHours <= 12) return { status: 'critica', remainingHours, label: `Crítica · ${remainingHours} h restantes` };
-  if (remainingHours <= 24) return { status: 'por_vencer', remainingHours, label: `Atención · ${remainingHours} h restantes` };
-  return { status: 'en_plazo', remainingHours, label: `En plazo · ${remainingHours} h restantes` };
+  if (daysElapsed > SLA_DAYS) return { status: 'vencida', daysElapsed, dueDate, label: `Vencida · ${daysElapsed} días` };
+  if (daysElapsed === SLA_DAYS) return { status: 'por_vencer', daysElapsed, dueDate, label: `Vence hoy · ${daysElapsed} días` };
+  return { status: 'en_plazo', daysElapsed, dueDate, label: `En plazo · ${daysElapsed} días` };
 }
 
 function mapCsvRowToRecord(r, originalIndex) {
@@ -206,6 +231,7 @@ function mapCsvRowToRecord(r, originalIndex) {
   const tipo = clean(r.TIPO || r.tipo || (clean(r.ESTADO_SAP).toUpperCase() === 'CER' ? 'Ejecutado' : 'Pendiente'));
   const fechaInicio = clean(r.FECHA_INICIO || r.fecha_inicio);
   const fechaFin = clean(r.FECHA_FIN || r.fecha_fin);
+  const fechaVencimiento = clean(r.FECHA_VENCIMIENTO || r.fecha_vencimiento);
   const intervaloOriginal = clean(r.INTERVALO || r.intervalo);
   const intervaloNormalizado = normalizeIntervalString(intervaloOriginal, fechaInicio, fechaFin, tipo);
 
@@ -237,11 +263,15 @@ function mapCsvRowToRecord(r, originalIndex) {
     fecha_fin: fechaFin,
     fecha_inicio_date: parseDateOnly(fechaInicio),
     fecha_fin_date: parseDateOnly(fechaFin),
+    fecha_vencimiento_date: parseDateOnly(fechaVencimiento) || addCalendarDays(parseDateOnly(fechaInicio), SLA_DAYS),
     intervalo: intervaloOriginal,
     intervalo_normalizado: intervaloNormalizado,
     intervalo_hours: intervalHours,
     dia_key: diaKey,
-    fecha_actualizacion: clean(r.FECHA_ACTUALIZACION || r.fecha_actualizacion),
+    fecha_actualizacion: clean(
+      r.FECHA_ACTUALIZACION_SISTEMA || r.fecha_actualizacion_sistema ||
+      r.FECHA_ACTUALIZACION || r.fecha_actualizacion
+    ),
     ubicacion_tecnica: clean(r.UBICACION_TECNICA || r.ubicacion_tecnica),
     grupo_hojas_ruta: clean(r.GRUPO_HOJAS_RUTA || r.grupo_hojas_ruta)
   };
@@ -274,46 +304,41 @@ function formatShortDate(dateStr) {
 
 function getObrasSla(record) {
   const startStr = record.fecha_inicio_date || parseDateOnly(record.fecha_inicio);
-  if (!startStr) return { status: 'sin_dato', label: 'Sin fecha', days: 0 };
-
-  const [sy, sm, sd] = startStr.split('-').map(Number);
-  const startDate = new Date(sy, sm - 1, sd);
+  if (!startStr) return { status: 'sin_dato', label: 'Sin fecha', days: 0, dueDate: '' };
 
   let targetDate;
   if (record.is_ejecutado) {
     const endStr = record.fecha_fin_date || parseDateOnly(record.fecha_fin);
     if (endStr) {
-      const [ey, em, ed] = endStr.split('-').map(Number);
-      targetDate = new Date(ey, em - 1, ed);
+      targetDate = endStr;
     } else {
-      return { status: 'en_plazo', label: 'Atendido', days: 0 };
+      return { status: 'en_plazo', label: 'Atendido', days: 0, dueDate: record.fecha_vencimiento_date || addCalendarDays(startStr, SLA_DAYS) };
     }
   } else {
-    const now = new Date();
-    targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    targetDate = getTodayIso();
   }
 
-  const diffTime = targetDate.getTime() - startDate.getTime();
-  const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+  const diffDays = calendarDaysBetween(startStr, targetDate);
+  const dueDate = record.fecha_vencimiento_date || addCalendarDays(startStr, SLA_DAYS);
 
   if (record.is_ejecutado) {
     if (diffDays <= 2) {
-      return { status: 'en_plazo', label: `Atendido en plazo (${diffDays}d)`, days: diffDays };
+      return { status: 'en_plazo', label: `Atendido en plazo · ${diffDays} días`, days: diffDays, dueDate };
     }
-    return { status: 'vencida', label: `Atendido fuera de plazo (${diffDays}d)`, days: diffDays };
+    return { status: 'vencida', label: `Atendido fuera de plazo · ${diffDays} días`, days: diffDays, dueDate };
   }
 
   // Pendiente: Plazo de 2 días
   // Día 0 (ingreso) y Día 1 -> En plazo
   if (diffDays <= 1) {
-    return { status: 'en_plazo', label: `En plazo (${diffDays}d)`, days: diffDays };
+    return { status: 'en_plazo', label: `En plazo · ${diffDays} días`, days: diffDays, dueDate };
   }
   // Día 2 -> Por vencer (vence hoy)
   if (diffDays === 2) {
-    return { status: 'por_vencer', label: 'Vence hoy (Día 2)', days: diffDays };
+    return { status: 'por_vencer', label: 'Vence hoy · 2 días', days: diffDays, dueDate };
   }
   // Día 3 en adelante -> Vencida / Fuera de plazo
-  return { status: 'vencida', label: `Vencida (${diffDays}d)`, days: diffDays };
+  return { status: 'vencida', label: `Vencida · ${diffDays} días`, days: diffDays, dueDate };
 }
 
 function mapObrasRow(r, index) {
@@ -326,6 +351,7 @@ function mapObrasRow(r, index) {
   const source = isReparacion ? 'Reparación de veredas' : 'Obras georreferenciadas';
   const fechaInicio = clean(r.FECHA_INICIO || r.fecha_inicio);
   const fechaFin = clean(r.FECHA_FIN || r.fecha_fin);
+  const fechaVencimiento = clean(r.FECHA_VENCIMIENTO || r.fecha_vencimiento);
   const estadoOriginal = clean(r.ESTADO_SAP || r.estado_sap || r.ESTADO || r.estado);
   const contratista = clean(r.CONTRATISTA || r.contratista) || 'Sin contratista';
   const distrito = clean(r.DISTRITO || r.distrito) || 'Sin distrito';
@@ -355,6 +381,7 @@ function mapObrasRow(r, index) {
     fecha_inicio_date: parseDateOnly(fechaInicio),
     fecha_fin: fechaFin,
     fecha_fin_date: parseDateOnly(fechaFin),
+    fecha_vencimiento_date: parseDateOnly(fechaVencimiento) || addCalendarDays(parseDateOnly(fechaInicio), SLA_DAYS),
     intervalo,
     ubicacion_tecnica: '',
     lat: Number.isFinite(lat) ? lat : null,
@@ -421,9 +448,19 @@ async function loadRows() {
   }
 }
 
+function parseSourceTimestamp(value) {
+  const raw = clean(value);
+  const peruFormat = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (peruFormat) {
+    const [, day, month, year, hour = '0', minute = '0', second = '0'] = peruFormat;
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+  }
+  return new Date(raw);
+}
+
 function updateDataStatus(records) {
   const updateDates = records
-    .map(record => new Date(record.fecha_actualizacion))
+    .map(record => parseSourceTimestamp(record.fecha_actualizacion))
     .filter(date => !Number.isNaN(date.getTime()));
   const latestUpdate = updateDates.length
     ? new Date(Math.max(...updateDates.map(date => date.getTime())))
@@ -596,7 +633,7 @@ function renderMap() {
       const slaInfo = getSlaInfo(r);
       if (slaInfo.status === 'vencida') {
         slaStatus = 'vencida';
-      } else if (slaInfo.status === 'critica' || slaInfo.status === 'por_vencer') {
+      } else if (slaInfo.status === 'por_vencer') {
         slaStatus = 'por_vencer';
       } else {
         slaStatus = 'en_plazo';
@@ -656,7 +693,8 @@ function renderMap() {
           <div><b>Distrito:</b> ${escapeHtml(r.distrito)} | <b>Tipo:</b> ${escapeHtml(r.tipo_trabajo || r.tipo_obra || '-')}</div>
           <div><b>Fecha Ingreso:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
           ${r.fecha_fin ? `<div><b>Fecha Atención:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>` : ''}
-          <div><b>Duración:</b> ${escapeHtml(r.intervalo || (r.sla?.days ? `${r.sla.days}d` : '-'))}</div>
+          <div><b>Vencimiento:</b> ${escapeHtml(formatShortDate(r.sla?.dueDate || r.fecha_vencimiento_date))}</div>
+          <div><b>Días transcurridos:</b> ${escapeHtml(r.sla?.days ?? '-')}</div>
           <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">Abrir en Google Maps</a>
         </div>
       `;
@@ -666,8 +704,8 @@ function renderMap() {
       return;
     }
 
-    const regularSla = r.tipo === 'Pendiente' ? getSlaInfo(r) : null;
-    const regularSlaBadge = regularSla ? `
+    const regularSla = getSlaInfo(r);
+    const regularSlaBadge = r.tipo === 'Pendiente' ? `
       <div style="margin-bottom:6px">
         <span class="deadline-badge deadline-${regularSla.status}">
           ${escapeHtml(regularSla.label)}
@@ -685,9 +723,10 @@ function renderMap() {
         <div><b>SED:</b> ${escapeHtml(r.sed)} (${escapeHtml(r.distrito)})</div>
         <div><b>Contratista:</b> <span style="color:${companyColor};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
         <div><b>Tensión:</b> ${escapeHtml(r.tension)} | <b>Estado SAP:</b> ${escapeHtml(r.estado_original)}</div>
-        <div><b>Fecha Inicio:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
+        <div><b>Fecha Ingreso:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
+        <div><b>Fecha Vencimiento:</b> ${escapeHtml(formatShortDate(regularSla?.dueDate || r.fecha_vencimiento_date))}</div>
         <div><b>Fecha Fin Real:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>
-        <div><b>Antigüedad:</b> ${escapeHtml(r.intervalo || '-')}</div>
+        <div><b>Días transcurridos:</b> ${escapeHtml(regularSla.daysElapsed ?? '-')}</div>
         <div><b>Ubicación:</b> <small>${escapeHtml(r.ubicacion_tecnica || '-')}</small></div>
         <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">🗺 Abrir en Google Maps</a>
       </div>
@@ -870,8 +909,7 @@ function getFilteredReportRows(tipo) {
     if (interval && clean(r.intervalo_normalizado) !== interval) return false;
     if (tipo === 'Pendiente' && sla) {
       const slaInfo = getSlaInfo(r);
-      const isUrgent = Number.isFinite(slaInfo.remainingHours) && slaInfo.remainingHours > 0 && slaInfo.remainingHours <= 24;
-      if (sla === 'urgente' ? !isUrgent : slaInfo.status !== sla) return false;
+      if (slaInfo.status !== sla) return false;
     }
 
     // Filtro de Rango de Fechas (Desde - Hasta)
@@ -911,14 +949,14 @@ function sortRows(rows, sortConfig) {
     }
 
     if (column === 'sla') {
-      const hoursA = getSlaInfo(a).remainingHours;
-      const hoursB = getSlaInfo(b).remainingHours;
-      const valueA = Number.isFinite(hoursA) ? hoursA : Number.MAX_SAFE_INTEGER;
-      const valueB = Number.isFinite(hoursB) ? hoursB : Number.MAX_SAFE_INTEGER;
+      const daysA = getSlaInfo(a).daysElapsed;
+      const daysB = getSlaInfo(b).daysElapsed;
+      const valueA = Number.isFinite(daysA) ? daysA : Number.MAX_SAFE_INTEGER;
+      const valueB = Number.isFinite(daysB) ? daysB : Number.MAX_SAFE_INTEGER;
       return isAsc ? valueA - valueB : valueB - valueA;
     }
 
-    if (column === 'fecha_inicio' || column === 'fecha_fin') {
+    if (column === 'fecha_inicio' || column === 'fecha_fin' || column === 'fecha_vencimiento_date') {
       const dateA = a[column] ? new Date(a[column]).getTime() : 0;
       const dateB = b[column] ? new Date(b[column]).getTime() : 0;
       return isAsc ? dateA - dateB : dateB - dateA;
@@ -942,8 +980,7 @@ function updateReportView(tipo) {
   const ap = filtered.filter(r => clean(r.tension).toUpperCase().includes('AP')).length;
   const dueSoon = tipo === 'Pendiente'
     ? filtered.filter(r => {
-      const { remainingHours } = getSlaInfo(r);
-      return Number.isFinite(remainingHours) && remainingHours > 0 && remainingHours <= 24;
+      return getSlaInfo(r).status === 'por_vencer';
     }).length
     : 0;
 
@@ -954,7 +991,7 @@ function updateReportView(tipo) {
   if (tipo === 'Pendiente') {
     const kpiEl = $(`kpiDueSoonPendiente`);
     if (kpiEl) kpiEl.textContent = dueSoon.toLocaleString('es-PE');
-    const isUrgentActive = state.filters.sla === 'urgente';
+    const isUrgentActive = state.filters.sla === 'por_vencer';
     const card = $('cardDueSoonPendiente');
     if (card) {
       card.classList.toggle('active-filter', isUrgentActive);
@@ -1049,8 +1086,8 @@ function renderReportTable(tipo, filtered) {
 
   pageRows.forEach((r, idx) => {
     const tr = document.createElement('tr');
-    const sla = tipo === 'Pendiente' ? getSlaInfo(r) : null;
-    if (sla) tr.classList.add(`sla-${sla.status}`);
+    const sla = getSlaInfo(r);
+    if (tipo === 'Pendiente') tr.classList.add(`sla-${sla.status}`);
     
     let estadoBadge = escapeHtml(r.estado_original);
     const estUpper = clean(r.estado_original).toUpperCase();
@@ -1065,7 +1102,7 @@ function renderReportTable(tipo, filtered) {
     }
 
     const tensionBadge = r.tension ? `<span class="badge-tension">${escapeHtml(r.tension)}</span>` : '-';
-    const slaBadge = sla ? `<span class="deadline-badge deadline-${sla.status}">${escapeHtml(sla.label)}</span>` : '-';
+    const slaBadge = tipo === 'Pendiente' ? `<span class="deadline-badge deadline-${sla.status}">${escapeHtml(sla.label)}</span>` : '-';
 
     tr.innerHTML = `
       <td style="font-weight:700;color:var(--text-muted)">${start + idx + 1}</td>
@@ -1076,9 +1113,10 @@ function renderReportTable(tipo, filtered) {
       <td><span style="color:${getCompanyColor(r.contratista)};font-weight:800">${escapeHtml(r.contratista)}</span></td>
       <td>${escapeHtml(r.distrito)}</td>
       <td>${tensionBadge}</td>
-      <td>${escapeHtml(tipo === 'Ejecutado' ? r.fecha_fin : r.fecha_inicio)}</td>
-      <td style="font-weight:600">${escapeHtml(r.intervalo || '-')}</td>
-      ${tipo === 'Pendiente' ? `<td>${slaBadge}</td>` : ''}
+      <td>${escapeHtml(formatShortDate(r.fecha_inicio))}</td>
+      <td>${escapeHtml(formatShortDate(sla?.dueDate || r.fecha_vencimiento_date))}</td>
+      <td style="font-weight:600">${escapeHtml(sla?.daysElapsed ?? r.intervalo ?? '-')}</td>
+      ${tipo === 'Pendiente' ? `<td>${slaBadge}</td>` : `<td>${escapeHtml(formatShortDate(r.fecha_fin))}</td>`}
       <td><small style="color:var(--text-secondary)">${escapeHtml(r.ubicacion_tecnica || '-')}</small></td>
     `;
     tbody.appendChild(tr);
@@ -1142,7 +1180,7 @@ function downloadCurrentTable(tipo) {
     return;
   }
 
-  const headers = ['Orden', 'Orden Origen', 'Tipo', 'Estado SAP', 'Contratista', 'Tension', 'SED', 'Distrito', 'Latitud', 'Longitud', 'Fecha Inicio', 'Fecha Fin', 'Intervalo', 'Situacion SLA 48h', 'Horas restantes SLA', 'Ubicacion Tecnica'];
+  const headers = ['Orden', 'Orden Origen', 'Tipo', 'Estado SAP', 'Contratista', 'Tension', 'SED', 'Distrito', 'Latitud', 'Longitud', 'Fecha Ingreso', 'Fecha Fin', 'Fecha Vencimiento', 'Dias transcurridos', 'Situacion SLA 2 dias', 'Ubicacion Tecnica'];
   const csvLines = [headers.join(';')];
 
   rows.forEach(r => {
@@ -1159,9 +1197,9 @@ function downloadCurrentTable(tipo) {
       r.lon,
       r.fecha_inicio,
       r.fecha_fin,
-      r.intervalo,
+      getSlaInfo(r).dueDate,
+      getSlaInfo(r).daysElapsed,
       tipo === 'Pendiente' ? getSlaInfo(r).label : '',
-      tipo === 'Pendiente' ? getSlaInfo(r).remainingHours : '',
       r.ubicacion_tecnica
     ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`);
     csvLines.push(vals.join(';'));
@@ -1422,7 +1460,8 @@ function renderObrasTable(rows) {
       <td>${escapeHtml(row.estado_original || '-')}</td>
       <td>${escapeHtml(row.tipo_trabajo || row.tipo_obra || '-')}</td>
       <td><b>${escapeHtml(formatShortDate(row.fecha_inicio))}</b></td>
-      <td>${escapeHtml(row.intervalo || (row.sla?.days ? `${row.sla.days}d` : '-'))}</td>
+      <td><b>${escapeHtml(formatShortDate(row.sla?.dueDate || row.fecha_vencimiento_date))}</b></td>
+      <td>${escapeHtml(row.sla?.days ?? '-')}</td>
       <td><span class="badge-status-sap ${isPeruCoordinate(row) ? 'badge-sap-cer' : 'badge-sap-lib'}">${isPeruCoordinate(row) ? 'Mapeado' : 'Sin ubicación'}</span></td>
     `;
     body.appendChild(tr);
@@ -1483,7 +1522,7 @@ function downloadObrasTable() {
     alert('No hay registros de obras para descargar.');
     return;
   }
-  const headers = ['#', 'LCL/ODM', 'Presupuesto/Ref', 'SubTab', 'Situacion SLA (2d)', 'Contratista', 'Distrito', 'Estado', 'Tipo Trabajo', 'Fecha Ingreso', 'Fecha Atencion', 'Duracion', 'Latitud', 'Longitud'];
+  const headers = ['#', 'LCL/ODM', 'Presupuesto/Ref', 'SubTab', 'Situacion SLA (2d)', 'Contratista', 'Distrito', 'Estado', 'Tipo Trabajo', 'Fecha Ingreso', 'Fecha Vencimiento', 'Fecha Atencion', 'Dias transcurridos', 'Latitud', 'Longitud'];
   const csvLines = [headers.join(';')];
   rows.forEach((r, idx) => {
     const vals = [
@@ -1497,8 +1536,9 @@ function downloadObrasTable() {
       r.estado_original,
       r.tipo_trabajo,
       formatShortDate(r.fecha_inicio),
+      formatShortDate(r.sla?.dueDate || r.fecha_vencimiento_date),
       r.fecha_fin ? formatShortDate(r.fecha_fin) : '',
-      r.intervalo,
+      r.sla?.days ?? '',
       r.lat,
       r.lon
     ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`);
