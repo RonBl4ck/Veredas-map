@@ -239,6 +239,7 @@ function mapCsvRowToRecord(r, originalIndex) {
     intervalo_normalizado: intervaloNormalizado,
     intervalo_hours: intervalHours,
     dia_key: diaKey,
+    fecha_actualizacion: clean(r.FECHA_ACTUALIZACION || r.fecha_actualizacion),
     ubicacion_tecnica: clean(r.UBICACION_TECNICA || r.ubicacion_tecnica),
     grupo_hojas_ruta: clean(r.GRUPO_HOJAS_RUTA || r.grupo_hojas_ruta)
   };
@@ -393,9 +394,12 @@ async function loadRows() {
     const raw = parseCsv(text);
     if (raw.length === 0) throw new Error('CSV vacío');
 
-    const records = raw.map((r, idx) => mapCsvRowToRecord(r, idx));
-    $('lastUpdate').textContent = `🟢 En vivo (${records.length.toLocaleString('es-PE')} reg.)`;
-    $('lastUpdate').title = 'Sincronizado en tiempo real desde Google Sheets';
+    const records = raw
+      .map((r, idx) => mapCsvRowToRecord(r, idx))
+      // Una orden ejecutada sin fecha de fin no debe formar parte del tablero.
+      // Se mostrará recién cuando la fuente SAP tenga la fecha de cierre completa.
+      .filter(record => record.tipo !== 'Ejecutado' || Boolean(record.fecha_fin_date));
+    updateDataStatus(records);
     return records;
 
   } catch (err) {
@@ -413,6 +417,30 @@ async function loadRows() {
       throw new Error(`Falló carga remota y local: ${err.message} | ${localErr.message}`);
     }
   }
+}
+
+function updateDataStatus(records) {
+  const updateDates = records
+    .map(record => new Date(record.fecha_actualizacion))
+    .filter(date => !Number.isNaN(date.getTime()));
+  const latestUpdate = updateDates.length
+    ? new Date(Math.max(...updateDates.map(date => date.getTime())))
+    : null;
+  const label = $('lastUpdateLabel');
+
+  if (!label) return;
+  if (!latestUpdate) {
+    label.textContent = `Actualización no disponible · ${records.length.toLocaleString('es-PE')} reg.`;
+    $('lastUpdate').title = 'La fuente no incluye fecha de actualización.';
+    return;
+  }
+
+  const stamp = new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(latestUpdate);
+  label.textContent = `Actualizado ${stamp} · ${records.length.toLocaleString('es-PE')} reg.`;
+  $('lastUpdate').title = 'Fecha más reciente informada por la fuente de datos.';
 }
 
 // =============================================================
@@ -1545,7 +1573,8 @@ async function initApp() {
 
   } catch (err) {
     console.error('Error al inicializar aplicación:', err);
-    $('lastUpdate').textContent = '❌ Error de carga';
+    $('lastUpdateLabel').textContent = 'Error de carga';
+    $('lastUpdate').title = 'No se pudieron cargar los datos.';
   }
 }
 

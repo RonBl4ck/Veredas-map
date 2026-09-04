@@ -84,7 +84,7 @@
     <div class="nav-right">
       <div id="lastUpdate" class="update-chip" title="Estado de la conexión">
         <span class="pulse-dot"></span>
-        <span class="update-label">Cargando datos…</span>
+        <span id="lastUpdateLabel" class="update-label">Cargando datos…</span>
       </div>
       <button id="btnLogout" class="btn-logout" title="Cerrar sesión">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -352,9 +352,9 @@
             <table id="tablePendiente">
               <thead>
                 <tr>
-                  <th class="sortable th-idx" data-sort="idx"># <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="estado_original">Estado SAP <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="orden">Orden <span class="sort-icon"></span></th>
+                  <th class="sortable th-idx" data-sort="idx" onclick="handleTableSort('Pendiente', 'idx')"># <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="estado_original" onclick="handleTableSort('Pendiente', 'estado_original')">Estado SAP <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="orden" onclick="handleTableSort('Pendiente', 'orden')">Orden <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="orden_sistema_origen" onclick="handleTableSort('Pendiente', 'orden_sistema_origen')">Orden Origen <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="sed" onclick="handleTableSort('Pendiente', 'sed')">SED <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="contratista" onclick="handleTableSort('Pendiente', 'contratista')">Contratista <span class="sort-icon"></span></th>
