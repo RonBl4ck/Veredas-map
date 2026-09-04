@@ -115,15 +115,15 @@
         <div class="legend-companies" style="gap:5px;margin-bottom:4px">
           <div class="legend-row">
             <i class="dot" style="background:#10B981;box-shadow:0 0 0 2px #A7F3D0"></i>
-            <span style="font-size:11px">🟢 En plazo</span>
+            <span style="font-size:11px">En plazo</span>
           </div>
           <div class="legend-row">
             <i class="dot" style="background:#F59E0B;box-shadow:0 0 0 2px #FDE68A"></i>
-            <span style="font-size:11px">🟠 Por vencer / Crítico</span>
+            <span style="font-size:11px">Por vencer</span>
           </div>
           <div class="legend-row">
             <i class="dot" style="background:#EF4444;box-shadow:0 0 0 2px #FECACA"></i>
-            <span style="font-size:11px">🔴 Vencido</span>
+            <span style="font-size:11px">Vencido</span>
           </div>
         </div>
         <hr class="legend-sep">
@@ -355,6 +355,7 @@
                   <th class="sortable th-idx" data-sort="idx" onclick="handleTableSort('Pendiente', 'idx')"># <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="estado_original" onclick="handleTableSort('Pendiente', 'estado_original')">Estado SAP <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="orden" onclick="handleTableSort('Pendiente', 'orden')">Orden <span class="sort-icon"></span></th>
+                  <th>Estado de plazo</th>
                   <th class="sortable" data-sort="orden_sistema_origen" onclick="handleTableSort('Pendiente', 'orden_sistema_origen')">Orden Origen <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="sed" onclick="handleTableSort('Pendiente', 'sed')">SED <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="contratista" onclick="handleTableSort('Pendiente', 'contratista')">Contratista <span class="sort-icon"></span></th>
@@ -363,7 +364,6 @@
                   <th class="sortable" data-sort="fecha_inicio" onclick="handleTableSort('Pendiente', 'fecha_inicio')">Fecha ingreso <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="fecha_vencimiento_date" onclick="handleTableSort('Pendiente', 'fecha_vencimiento_date')">Vencimiento <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="sla" onclick="handleTableSort('Pendiente', 'sla')">Días transcurridos <span class="sort-icon"></span></th>
-                  <th>Estado de plazo</th>
                   <th class="sortable" data-sort="ubicacion_tecnica" onclick="handleTableSort('Pendiente', 'ubicacion_tecnica')">Ubicación Técnica <span class="sort-icon"></span></th>
                 </tr>
               </thead>
@@ -581,6 +581,7 @@
                   <th class="sortable th-idx" data-sort="idx" onclick="handleTableSort('Ejecutado', 'idx')"># <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="estado_original" onclick="handleTableSort('Ejecutado', 'estado_original')">Estado SAP <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="orden" onclick="handleTableSort('Ejecutado', 'orden')">Orden <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="nota_especifica" onclick="handleTableSort('Ejecutado', 'nota_especifica')">Nota específica <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="orden_sistema_origen" onclick="handleTableSort('Ejecutado', 'orden_sistema_origen')">Orden Origen <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="sed" onclick="handleTableSort('Ejecutado', 'sed')">SED <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="contratista" onclick="handleTableSort('Ejecutado', 'contratista')">Contratista <span class="sort-icon"></span></th>
@@ -590,7 +591,6 @@
                   <th class="sortable" data-sort="fecha_vencimiento_date" onclick="handleTableSort('Ejecutado', 'fecha_vencimiento_date')">Vencimiento <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="sla" onclick="handleTableSort('Ejecutado', 'sla')">Días transcurridos <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="fecha_fin" onclick="handleTableSort('Ejecutado', 'fecha_fin')">Fecha fin real <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="nota_especifica" onclick="handleTableSort('Ejecutado', 'nota_especifica')">Nota específica <span class="sort-icon"></span></th>
                 </tr>
               </thead>
               <tbody id="tableBodyEjecutado"></tbody>
@@ -770,7 +770,6 @@
                 <tr>
                   <th class="sortable th-idx" data-sort="idx" onclick="handleObrasSort('idx')"># <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="lcl" onclick="handleObrasSort('lcl')">LCL/ODM <span class="sort-icon"></span></th>
-                  <th class="sortable" data-sort="sla" onclick="handleObrasSort('sla')">Plazo (SLA 2d) <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="contratista" onclick="handleObrasSort('contratista')">Contratista <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="distrito" onclick="handleObrasSort('distrito')">Distrito <span class="sort-icon"></span></th>
                   <th class="sortable" data-sort="estado_original" onclick="handleObrasSort('estado_original')">Estado <span class="sort-icon"></span></th>

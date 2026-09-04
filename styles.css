@@ -212,6 +212,21 @@ html, body {
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(77, 163, 56, 0); }
 }
 
+/* Los clusters representan cantidad de órdenes, no situación de plazo. */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-color: rgba(27, 78, 155, 0.20);
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background-color: #1B4E9B;
+  color: #FFFFFF;
+  font-weight: 800;
+}
+
 .btn-logout {
   display: flex;
   align-items: center;
@@ -964,6 +979,15 @@ th, td {
   white-space: nowrap;
 }
 
+.cell-note {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  color: var(--text-secondary);
+}
+
 th {
   background: var(--pluz-blue-subtle);
   color: var(--pluz-blue);
@@ -1535,4 +1559,3 @@ tbody tr.sla-en_plazo td:first-child { box-shadow: inset 4px 0 0 #2E7D32; }
   background: #FFF8E1;
   color: #D97706;
 }
-

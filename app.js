@@ -80,8 +80,12 @@ const obrasState = {
 const $ = byId;
 const clean = (val) => String(val ?? '').trim();
 const escapeHtml = (val) => clean(val).replace(/[&<>'"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[c]));
+const normalizeContractor = (value) => {
+  const contractor = clean(value).toUpperCase();
+  return /^CREC\s*10$/.test(contractor) ? 'CREC 10' : contractor;
+};
 const getCompanyColor = (company) => {
-  const normalized = clean(company).toUpperCase();
+  const normalized = normalizeContractor(company);
   if (normalized.includes('PA PERU') || normalized === 'PA') return COMPANY_COLORS.PA;
   if (COMPANY_COLORS[normalized]) return COMPANY_COLORS[normalized];
   const hash = [...normalized].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 0);
@@ -253,7 +257,7 @@ function mapCsvRowToRecord(r, originalIndex) {
     orden_sistema_origen: clean(r.ORDEN_ORIGEN || r.ORDEN_SISTEMA_ORIGEN || r.orden_sistema_origen),
     tipo: tipo === 'Ejecutado' ? 'Ejecutado' : 'Pendiente',
     estado_original: clean(r.ESTADO_SAP || r.estado_original),
-    contratista: clean(r.CONTRATISTA || r.contratista) || 'Sin contratista',
+    contratista: normalizeContractor(r.CONTRATISTA || r.contratista) || 'Sin contratista',
     tension: clean(r.TENSION || r.tension) || 'Sin nivel',
     sed: clean(r.SED || r.sed) || 'Sin SED',
     distrito: clean(r.DISTRITO || r.distrito) || 'Sin distrito',
@@ -354,7 +358,7 @@ function mapObrasRow(r, index) {
   const fechaFin = clean(r.FECHA_FIN || r.fecha_fin);
   const fechaVencimiento = clean(r.FECHA_VENCIMIENTO || r.fecha_vencimiento);
   const estadoOriginal = clean(r.ESTADO_SAP || r.estado_sap || r.ESTADO || r.estado);
-  const contratista = clean(r.CONTRATISTA || r.contratista) || 'Sin contratista';
+  const contratista = normalizeContractor(r.CONTRATISTA || r.contratista) || 'Sin contratista';
   const distrito = clean(r.DISTRITO || r.distrito) || 'Sin distrito';
   const intervalo = clean(r.INTERVALO || r.intervalo);
 
@@ -857,7 +861,7 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
       plugins: {
         legend: { display: false },
         datalabels: {
-          display: true,
+          display: options.showDataLabels ?? (type !== 'line' || labels.length <= 14),
           color: type === 'bar' ? (isHorizontalBar ? '#0F2338' : '#ffffff') : '#0F2338',
           font: { weight: '800', size: 10, family: "'Plus Jakarta Sans', sans-serif" },
           anchor: isHorizontalBar ? 'end' : (type === 'line' ? 'end' : 'center'),
@@ -1109,6 +1113,7 @@ function renderReportTable(tipo, filtered) {
       <td style="font-weight:700;color:var(--text-muted)">${start + idx + 1}</td>
       <td>${estadoBadge}</td>
       <td><strong style="color:var(--pluz-blue);font-size:12.5px">${escapeHtml(r.orden)}</strong></td>
+      ${tipo === 'Pendiente' ? `<td>${slaBadge}</td>` : `<td><small class="cell-note" title="${escapeHtml(r.nota_especifica || '-')}">${escapeHtml(r.nota_especifica || '-')}</small></td>`}
       <td style="color:var(--text-secondary)">${escapeHtml(r.orden_sistema_origen || '-')}</td>
       <td><b style="color:var(--text-main)">${escapeHtml(r.sed)}</b></td>
       <td><span style="color:${getCompanyColor(r.contratista)};font-weight:800">${escapeHtml(r.contratista)}</span></td>
@@ -1117,8 +1122,8 @@ function renderReportTable(tipo, filtered) {
       <td>${escapeHtml(formatShortDate(r.fecha_inicio))}</td>
       <td>${escapeHtml(formatShortDate(sla?.dueDate || r.fecha_vencimiento_date))}</td>
       <td style="font-weight:600">${escapeHtml(sla?.daysElapsed ?? r.intervalo ?? '-')}</td>
-      ${tipo === 'Pendiente' ? `<td>${slaBadge}</td>` : `<td>${escapeHtml(formatShortDate(r.fecha_fin))}</td>`}
-      <td><small style="color:var(--text-secondary)">${escapeHtml(tipo === 'Ejecutado' ? (r.nota_especifica || '-') : (r.ubicacion_tecnica || '-'))}</small></td>
+      ${tipo === 'Ejecutado' ? `<td>${escapeHtml(formatShortDate(r.fecha_fin))}</td>` : ''}
+      ${tipo === 'Pendiente' ? `<td><small style="color:var(--text-secondary)">${escapeHtml(r.ubicacion_tecnica || '-')}</small></td>` : ''}
     `;
     tbody.appendChild(tr);
   });
@@ -1447,15 +1452,9 @@ function renderObrasTable(rows) {
     else if (row.sla && row.sla.status === 'por_vencer') tr.classList.add('sla-por_vencer');
     else if (row.sla && row.sla.status === 'en_plazo') tr.classList.add('sla-en_plazo');
 
-    const badgeClass = !row.sla ? 'deadline-sin_dato' :
-                       row.sla.status === 'vencida' ? 'deadline-vencida' :
-                       row.sla.status === 'por_vencer' ? 'deadline-por_vencer' :
-                       row.sla.status === 'en_plazo' ? 'deadline-en_plazo' : 'deadline-sin_dato';
-
     tr.innerHTML = `
       <td>${start + index + 1}</td>
       <td><strong style="color:var(--pluz-blue)">${escapeHtml(row.lcl)}</strong></td>
-      <td><span class="deadline-badge ${badgeClass}">${escapeHtml(row.sla ? row.sla.label : 'Sin dato')}</span></td>
       <td><span style="color:${getCompanyColor(row.contratista)};font-weight:800">${escapeHtml(row.contratista)}</span></td>
       <td>${escapeHtml(row.distrito)}</td>
       <td>${escapeHtml(row.estado_original || '-')}</td>
