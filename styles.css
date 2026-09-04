@@ -1417,3 +1417,99 @@ tbody tr.sla-en_plazo td:first-child { box-shadow: inset 4px 0 0 #2E7D32; }
     width: 100%;
   }
 }
+
+/* ============================================================= */
+/* CONTROLES Y AROS SLA DE OBRAS                                 */
+/* ============================================================= */
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  gap: 4px;
+  border: 1px solid var(--border);
+}
+
+.btn-segmented {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--tr-fast);
+  white-space: nowrap;
+}
+
+.btn-segmented:hover {
+  color: var(--pluz-blue);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.btn-segmented.active {
+  background: var(--pluz-blue);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(27, 78, 155, 0.25);
+}
+
+/* Aros luminosos SLA para mapa */
+.works-marker-wrapper {
+  position: relative;
+  width: 34px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.works-helmet-svg {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
+}
+
+.works-halo-ring {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sla-ring-vencida .works-halo-ring {
+  border-color: #EF4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.75);
+  animation: pulseSlaRed 1.8s infinite ease-in-out;
+}
+
+.sla-ring-por_vencer .works-halo-ring {
+  border-color: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.65);
+}
+
+.sla-ring-en_plazo .works-halo-ring {
+  border-color: #10B981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+@keyframes pulseSlaRed {
+  0% { transform: scale(0.96); opacity: 0.95; }
+  50% { transform: scale(1.18); opacity: 0.35; }
+  100% { transform: scale(0.96); opacity: 0.95; }
+}
+
+.kpi-card.kpi-success .kpi-icon-wrap { background: #E8F5E9; color: #2E7D32; }
+.kpi-card.kpi-warning .kpi-icon-wrap { background: #FFF8E1; color: #D97706; }
+.kpi-card.kpi-danger .kpi-icon-wrap { background: #FDECEC; color: #DC2626; }
+

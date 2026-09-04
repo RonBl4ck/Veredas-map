@@ -648,43 +648,185 @@
           <div class="hero-info">
             <span class="eyebrow eyebrow-obras">OBRAS Y REPARACIÓN DE VEREDAS</span>
             <h2>Indicadores de Obras</h2>
-            <p class="subtitle">Obras subterráneas y mixtas, complementadas con reparaciones cuyo LCL no existe en la base principal.</p>
+            <p class="subtitle">Monitoreo de veredas en obras con control de plazo operativo (SLA 2 días).</p>
           </div>
-          <div class="hero-status"><span class="status-pulse-amber"></span><span>Cobertura geográfica</span></div>
+          <div class="hero-actions">
+            <div class="segmented-control" id="obrasSubTabGroup">
+              <button type="button" class="btn-segmented active" data-subtab="Pendiente" onclick="setObrasSubTab('Pendiente')">⌛ Pendientes</button>
+              <button type="button" class="btn-segmented" data-subtab="Atendido" onclick="setObrasSubTab('Atendido')">✓ Atendidos</button>
+              <button type="button" class="btn-segmented" data-subtab="Todos" onclick="setObrasSubTab('Todos')">⚡ Todos</button>
+            </div>
+          </div>
         </div>
 
+        <!-- KPIs de Semáforo SLA (2 Días) -->
         <div class="kpi-grid">
-          <article class="kpi-card"><div class="kpi-icon-wrap icon-total">⛑</div><div class="kpi-data"><span class="kpi-label">TOTAL OBRAS</span><strong id="kpiTotalObras" class="kpi-value">0</strong><span class="kpi-foot">Registros consolidados por LCL</span></div></article>
-          <article class="kpi-card"><div class="kpi-icon-wrap icon-ap">⌖</div><div class="kpi-data"><span class="kpi-label">GEOREFERENCIADAS</span><strong id="kpiMappedObras" class="kpi-value">0</strong><span class="kpi-foot">Representadas en el mapa</span></div></article>
-          <article class="kpi-card"><div class="kpi-icon-wrap icon-bt">!</div><div class="kpi-data"><span class="kpi-label">SIN UBICACIÓN VÁLIDA</span><strong id="kpiInvalidObras" class="kpi-value">0</strong><span class="kpi-foot">Solo contabilizadas</span></div></article>
-          <article class="kpi-card"><div class="kpi-icon-wrap icon-mt">＋</div><div class="kpi-data"><span class="kpi-label">REPARACIONES AÑADIDAS</span><strong id="kpiRepairObras" class="kpi-value">0</strong><span class="kpi-foot">LCL ausentes en Obras</span></div></article>
+          <article class="kpi-card kpi-total">
+            <div class="kpi-icon-wrap icon-total">⛑</div>
+            <div class="kpi-data">
+              <span class="kpi-label">TOTAL OBRAS</span>
+              <strong id="kpiTotalObras" class="kpi-value">0</strong>
+              <span id="kpiFootTotalObras" class="kpi-foot">Registros filtrados</span>
+            </div>
+          </article>
+          <article class="kpi-card kpi-success">
+            <div class="kpi-icon-wrap icon-en-plazo">🟢</div>
+            <div class="kpi-data">
+              <span class="kpi-label">DENTRO DE PLAZO</span>
+              <strong id="kpiEnPlazoObras" class="kpi-value" style="color:#10B981">0</strong>
+              <span id="kpiFootEnPlazoObras" class="kpi-foot">Dentro de 2 días</span>
+            </div>
+          </article>
+          <article class="kpi-card kpi-warning">
+            <div class="kpi-icon-wrap icon-por-vencer">🟠</div>
+            <div class="kpi-data">
+              <span class="kpi-label">POR VENCER</span>
+              <strong id="kpiPorVencerObras" class="kpi-value" style="color:#F59E0B">0</strong>
+              <span id="kpiFootPorVencerObras" class="kpi-foot">Último día (Día 2)</span>
+            </div>
+          </article>
+          <article class="kpi-card kpi-danger">
+            <div class="kpi-icon-wrap icon-vencida">🔴</div>
+            <div class="kpi-data">
+              <span class="kpi-label">FUERA DE PLAZO</span>
+              <strong id="kpiVencidasObras" class="kpi-value" style="color:#EF4444">0</strong>
+              <span id="kpiFootVencidasObras" class="kpi-foot">Más de 2 días</span>
+            </div>
+          </article>
         </div>
 
+        <!-- Gráficos de Indicadores -->
         <div class="dashboard-charts">
-          <div class="chart-card"><div class="chart-title"><div><b>Contratistas</b><span>Distribución de obras</span></div><span class="chart-badge">Empresas</span></div><div class="chart-container"><canvas id="chartCompanyObras"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title"><div><b>Clasificación</b><span>Subterráneo, mixto y reparación</span></div><span class="chart-badge">Tipo</span></div><div class="chart-container"><canvas id="chartTypeObras"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title"><div><b>Estados</b><span>Situación operativa</span></div><span class="chart-badge">Top estados</span></div><div class="chart-container"><canvas id="chartStatusObras"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title"><div><b>Distritos</b><span>Mayor concentración territorial</span></div><span class="chart-badge">Top distritos</span></div><div class="chart-container"><canvas id="chartDistrictObras"></canvas></div></div>
+          <div class="chart-card chart-day wide-chart">
+            <div class="chart-title">
+              <div>
+                <b id="chartDayObrasTitle">Línea de Tiempo por Fecha de Ingreso</b>
+                <span>Tendencia de registros por día (DD/MM)</span>
+              </div>
+              <span class="chart-badge">Fechas</span>
+            </div>
+            <div class="chart-container"><canvas id="chartDayObras"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-title"><div><b>Contratistas</b><span>Distribución de obras</span></div><span class="chart-badge">Empresas</span></div>
+            <div class="chart-container"><canvas id="chartCompanyObras"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-title"><div><b>Distritos</b><span>Mayor concentración territorial</span></div><span class="chart-badge">Top distritos</span></div>
+            <div class="chart-container"><canvas id="chartDistrictObras"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-title"><div><b>Estados Operativos</b><span>Situación operativa de la obra</span></div><span class="chart-badge">Top estados</span></div>
+            <div class="chart-container"><canvas id="chartStatusObras"></canvas></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-title"><div><b>Tipo de Trabajo</b><span>Subterráneo, mixto y reparación</span></div><span class="chart-badge">Clasificación</span></div>
+            <div class="chart-container"><canvas id="chartTypeObras"></canvas></div>
+          </div>
         </div>
 
+        <!-- Tabla Detallada -->
         <div class="table-section">
           <div class="table-toolbar">
-            <div class="table-info"><strong class="table-title">Detalle consolidado de Obras</strong><span id="tableCountObras" class="table-count">0 registros</span></div>
-            <div class="table-search-wrap"><span class="search-lens">🔍</span><input type="search" id="tableSearchObras" class="table-search-input" placeholder="Buscar LCL, contratista, distrito…"></div>
+            <div class="table-info">
+              <strong class="table-title">Detalle consolidado de Obras</strong>
+              <span id="tableCountObras" class="table-count">0 registros</span>
+            </div>
+            <div class="table-toolbar-actions">
+              <div class="table-search-wrap">
+                <span class="search-lens">🔍</span>
+                <input type="search" id="tableSearchObras" class="table-search-input" placeholder="Buscar LCL, contratista, distrito…">
+              </div>
+              <button type="button" class="btn-download" onclick="downloadObrasTable()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Descargar CSV</span>
+              </button>
+            </div>
           </div>
           <div class="table-wrap">
-            <table id="tableObras"><thead><tr><th>#</th><th>LCL/ODM</th><th>Fuente</th><th>Contratista</th><th>Distrito</th><th>Estado</th><th>Tipo</th><th>Fecha</th><th>Georreferencia</th></tr></thead><tbody id="tableBodyObras"></tbody></table>
+            <table id="tableObras">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>LCL/ODM</th>
+                  <th>Plazo (SLA 2d)</th>
+                  <th>Contratista</th>
+                  <th>Distrito</th>
+                  <th>Estado</th>
+                  <th>Tipo Trabajo</th>
+                  <th>Fecha Ingreso</th>
+                  <th>Duración</th>
+                  <th>Georreferencia</th>
+                </tr>
+              </thead>
+              <tbody id="tableBodyObras"></tbody>
+            </table>
           </div>
           <div class="pagination-bar" id="paginationObras"></div>
         </div>
       </section>
 
+      <!-- Barra Lateral de Filtros -->
       <aside class="filter-sidebar">
-        <div class="filter-sidebar-head"><div><b>Filtros de Obras</b><span id="activeFilterCountObras" class="active-filters-desc">0 filtro(s) activo(s)</span></div><button type="button" class="link-btn-reset" onclick="resetObrasFilters()">Restablecer</button></div>
-        <div class="filter-group"><label for="obrasFilterSource">Fuente</label><select id="obrasFilterSource" onchange="applyObrasFilters()"><option value="">Todas las fuentes</option></select></div>
-        <div class="filter-group"><label for="obrasFilterCompany">Contratista</label><select id="obrasFilterCompany" onchange="applyObrasFilters()"><option value="">Todos los contratistas</option></select></div>
-        <div class="filter-group"><label for="obrasFilterDistrict">Distrito</label><select id="obrasFilterDistrict" onchange="applyObrasFilters()"><option value="">Todos los distritos</option></select></div>
-        <div class="filter-group"><label for="obrasFilterGeo">Georreferencia</label><select id="obrasFilterGeo" onchange="applyObrasFilters()"><option value="">Todos</option><option value="valid">Con ubicación válida</option><option value="invalid">Sin ubicación válida</option></select></div>
+        <div class="filter-sidebar-head">
+          <div>
+            <b>Filtros de Obras</b>
+            <span id="activeFilterCountObras" class="active-filters-desc">0 filtro(s) activo(s)</span>
+          </div>
+          <button type="button" class="link-btn-reset" onclick="resetObrasFilters()">Restablecer</button>
+        </div>
+
+        <!-- Filtro Rango de Fechas -->
+        <div class="filter-group">
+          <label>Rango de Fechas (Ingreso / Rotura)</label>
+          <div class="date-range-grid">
+            <label class="sub-label">Desde
+              <input id="obrasDateFrom" type="date" onchange="applyObrasFilters()">
+            </label>
+            <label class="sub-label">Hasta
+              <input id="obrasDateTo" type="date" onchange="applyObrasFilters()">
+            </label>
+          </div>
+        </div>
+
+        <!-- Filtro Estado de Plazo SLA -->
+        <div class="filter-group">
+          <label for="obrasFilterSla">Estado de Plazo (SLA 2 días)</label>
+          <select id="obrasFilterSla" onchange="applyObrasFilters()">
+            <option value="">Todos los estados</option>
+            <option value="en_plazo">🟢 Dentro de plazo (0 - 1 día)</option>
+            <option value="por_vencer">🟠 Por vencer (Último día - Día 2)</option>
+            <option value="vencida">🔴 Fuera de plazo (Más de 2 días)</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="obrasFilterCompany">Contratista</label>
+          <select id="obrasFilterCompany" onchange="applyObrasFilters()"><option value="">Todos los contratistas</option></select>
+        </div>
+
+        <div class="filter-group">
+          <label for="obrasFilterDistrict">Distrito</label>
+          <select id="obrasFilterDistrict" onchange="applyObrasFilters()"><option value="">Todos los distritos</option></select>
+        </div>
+
+        <div class="filter-group">
+          <label for="obrasFilterType">Tipo de Trabajo</label>
+          <select id="obrasFilterType" onchange="applyObrasFilters()"><option value="">Todos los tipos</option></select>
+        </div>
+
+        <div class="filter-group">
+          <label for="obrasFilterGeo">Georreferencia</label>
+          <select id="obrasFilterGeo" onchange="applyObrasFilters()">
+            <option value="">Todos</option>
+            <option value="valid">Con ubicación válida</option>
+            <option value="invalid">Sin ubicación válida</option>
+          </select>
+        </div>
       </aside>
     </div>
   </main>

@@ -62,7 +62,16 @@ const obrasState = {
   page: 1,
   pageSize: 50,
   search: '',
-  filters: { source: '', company: '', district: '', geo: '' }
+  subTab: 'Pendiente', // 'Pendiente' | 'Atendido' | 'Todos'
+  filters: {
+    dateFrom: '',
+    dateTo: '',
+    sla: '',
+    company: '',
+    district: '',
+    type: '',
+    geo: ''
+  }
 };
 
 const $ = byId;
@@ -246,122 +255,120 @@ function isPeruCoordinate(record) {
     && !(record.lat === 0 && record.lon === 0);
 }
 
-function lclParts(value) {
-  return clean(value).toUpperCase().split('/').map(part => part.trim()).filter(Boolean);
-}
-
-function dateScore(...values) {
-  for (const value of values) {
-    const date = parseDateOnly(value);
-    if (date) return date;
+function formatShortDate(dateStr) {
+  if (!dateStr) return '-';
+  const cleanStr = String(dateStr).trim().split(' ')[0].split('T')[0];
+  const parts = cleanStr.includes('/') ? cleanStr.split('/') : cleanStr.split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+    }
+    return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
   }
-  return '';
+  return cleanStr;
 }
 
-function keepLatestBy(records, key, getDate) {
-  const byKey = new Map();
-  records.forEach(record => {
-    const current = byKey.get(key(record));
-    if (!current || getDate(record) > getDate(current)) byKey.set(key(record), record);
-  });
-  return [...byKey.values()];
+function getObrasSla(record) {
+  const startStr = record.fecha_inicio_date || parseDateOnly(record.fecha_inicio);
+  if (!startStr) return { status: 'sin_dato', label: 'Sin fecha', days: 0 };
+
+  const [sy, sm, sd] = startStr.split('-').map(Number);
+  const startDate = new Date(sy, sm - 1, sd);
+
+  let targetDate;
+  if (record.is_ejecutado) {
+    const endStr = record.fecha_fin_date || parseDateOnly(record.fecha_fin);
+    if (endStr) {
+      const [ey, em, ed] = endStr.split('-').map(Number);
+      targetDate = new Date(ey, em - 1, ed);
+    } else {
+      targetDate = startDate;
+    }
+  } else {
+    const now = new Date();
+    targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
+  const diffTime = targetDate.getTime() - startDate.getTime();
+  const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+  if (record.is_ejecutado) {
+    if (diffDays <= 2) {
+      return { status: 'en_plazo', label: `Atendido en plazo (${diffDays}d)`, days: diffDays };
+    }
+    return { status: 'vencida', label: `Atendido fuera de plazo (${diffDays}d)`, days: diffDays };
+  }
+
+  // Pendiente: Plazo de 2 días
+  // Día 0 (ingreso) y Día 1 -> En plazo
+  if (diffDays <= 1) {
+    return { status: 'en_plazo', label: `En plazo (${diffDays}d)`, days: diffDays };
+  }
+  // Día 2 -> Por vencer (vence hoy)
+  if (diffDays === 2) {
+    return { status: 'por_vencer', label: 'Vence hoy (Día 2)', days: diffDays };
+  }
+  // Día 3 en adelante -> Vencida / Fuera de plazo
+  return { status: 'vencida', label: `Vencida (${diffDays}d)`, days: diffDays };
 }
 
-function keepLatestWithCoordinates(records, key, getDate) {
-  const groups = records.reduce((map, record) => {
-    const recordKey = key(record);
-    if (!map.has(recordKey)) map.set(recordKey, []);
-    map.get(recordKey).push(record);
-    return map;
-  }, new Map());
+function mapObrasRow(r, index) {
+  const lat = parseFloat(clean(r.LATITUD || r.lat || r.Latitud).replace(',', '.'));
+  const lon = parseFloat(clean(r.LONGITUD || r.lon || r.Longitud).replace(',', '.'));
+  const orden = clean(r.ORDEN || r.orden || r.LCL || r.lcl);
+  const ordenOrigen = clean(r.ORDEN_ORIGEN || r.orden_origen || r.PRESUPUESTO || r.presupuesto);
+  const tipoTrabajo = clean(r.TIPO_TRABAJO || r.tipo_trabajo);
+  const isReparacion = tipoTrabajo.toUpperCase().includes('REPARAC');
+  const source = isReparacion ? 'Reparación de veredas' : 'Obras georreferenciadas';
+  const fechaInicio = clean(r.FECHA_INICIO || r.fecha_inicio);
+  const fechaFin = clean(r.FECHA_FIN || r.fecha_fin);
+  const estadoOriginal = clean(r.ESTADO_SAP || r.estado_sap || r.ESTADO || r.estado);
+  const contratista = clean(r.CONTRATISTA || r.contratista) || 'Sin contratista';
+  const distrito = clean(r.DISTRITO || r.distrito) || 'Sin distrito';
+  const intervalo = clean(r.INTERVALO || r.intervalo);
 
-  return [...groups.values()].map(group => {
-    const latest = [...group].sort((a, b) => getDate(b).localeCompare(getDate(a)))[0];
-    if (isPeruCoordinate(latest)) return latest;
-    const georeferenced = [...group]
-      .filter(isPeruCoordinate)
-      .sort((a, b) => getDate(b).localeCompare(getDate(a)))[0];
-    return georeferenced
-      ? { ...latest, lat: georeferenced.lat, lon: georeferenced.lon, ubicacion_tecnica: georeferenced.ubicacion_tecnica }
-      : latest;
-  });
-}
+  const rawTipo = clean(r.TIPO || r.tipo).toUpperCase();
+  const isEjecutado = rawTipo === 'EJECUTADO' || Boolean(fechaFin);
 
-function keepLatestByOverlappingParts(records, getParts, getDate) {
-  const parent = records.map((_, index) => index);
-  const find = index => parent[index] === index ? index : (parent[index] = find(parent[index]));
-  const unite = (left, right) => {
-    const leftRoot = find(left), rightRoot = find(right);
-    if (leftRoot !== rightRoot) parent[rightRoot] = leftRoot;
+  const record = {
+    idx: index + 1,
+    source,
+    tipo: 'Obras',
+    tension: 'OBRAS',
+    is_ejecutado: isEjecutado,
+    orden,
+    lcl: orden,
+    orden_sistema_origen: ordenOrigen,
+    contratista,
+    distrito,
+    estado_original: estadoOriginal,
+    tipo_trabajo: tipoTrabajo,
+    tipo_obra: tipoTrabajo,
+    fecha_inicio: fechaInicio,
+    fecha_inicio_date: parseDateOnly(fechaInicio),
+    fecha_fin: fechaFin,
+    fecha_fin_date: parseDateOnly(fechaFin),
+    intervalo,
+    ubicacion_tecnica: '',
+    lat: Number.isFinite(lat) ? lat : null,
+    lon: Number.isFinite(lon) ? lon : null
   };
-  const partOwner = new Map();
 
-  records.forEach((record, index) => {
-    getParts(record).forEach(part => {
-      if (partOwner.has(part)) unite(index, partOwner.get(part));
-      else partOwner.set(part, index);
-    });
-  });
-
-  const groups = records.reduce((map, record, index) => {
-    const root = find(index);
-    if (!map.has(root)) map.set(root, []);
-    map.get(root).push(record);
-    return map;
-  }, new Map());
-
-  return [...groups.values()].map(group => {
-    const ordered = [...group].sort((a, b) => getDate(b).localeCompare(getDate(a)));
-    const latest = ordered[0];
-    const georeferenced = ordered.find(isPeruCoordinate);
-    return !isPeruCoordinate(latest) && georeferenced
-      ? { ...latest, lat: georeferenced.lat, lon: georeferenced.lon, ubicacion_tecnica: georeferenced.ubicacion_tecnica }
-      : latest;
-  });
-}
-
-function mapWorksRow(r, index) {
-  const location = parseLocation(r.Ubicación || r.UBICACION);
-  const lcl = clean(r['LCL/ODM'] || r.LCL);
-  const assigned = clean(r['Fecha de Asignación']);
-  return {
-    idx: index + 1, source: 'Obras georreferenciadas', tipo: 'Obras', tension: 'OBRAS', orden: lcl,
-    orden_sistema_origen: clean(r.PRESUPUESTO), lcl, contratista: clean(r['Empresa Colaboradora']) || 'Sin contratista',
-    distrito: clean(r.Distrito) || 'Sin distrito', estado_original: clean(r['Estado de Obra']),
-    tipo_trabajo: clean(r['Tipo de Trabajo']), tipo_obra: clean(r['Tipo de Obra']),
-    fecha_inicio: assigned, fecha_inicio_date: parseDateOnly(assigned), fecha_fin: '', fecha_fin_date: '',
-    ubicacion_tecnica: clean(r.Ubicación), lat: location.lat, lon: location.lon
-  };
-}
-
-function mapRepairRow(r, index) {
-  const location = parseLocation(r.Ubicación);
-  const repaired = clean(r['Fecha de Reparación de Vereda']);
-  const broken = clean(r['Fecha de Rotura de Vereda']);
-  return {
-    idx: index + 1, source: 'Reparación de veredas', tipo: 'Obras', tension: 'OBRAS', orden: clean(r.LCL),
-    orden_sistema_origen: clean(r['Suministro Referencia']), lcl: clean(r.LCL),
-    contratista: clean(r['Empresa Colaboradora']) || 'Sin contratista', distrito: clean(r.Distrito) || 'Sin distrito',
-    estado_original: clean(r['Estado de Vereda']), tipo_trabajo: '', tipo_obra: clean(r.Sector),
-    fecha_inicio: broken, fecha_inicio_date: parseDateOnly(broken), fecha_fin: repaired, fecha_fin_date: parseDateOnly(repaired),
-    ubicacion_tecnica: clean(r.Ubicación), motivo: clean(r['Motivo Fuera de Plazo']), lat: location.lat, lon: location.lon
-  };
+  record.sla = getObrasSla(record);
+  return record;
 }
 
 async function loadObrasRows() {
   try {
-    const response = await fetch(`/api/obras?_t=${Date.now()}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    const allWorks = (payload.works || []).map(mapWorksRow);
-    const worksLcls = new Set(allWorks.flatMap(record => lclParts(record.lcl)));
-    const works = allWorks
-      .filter(record => ['SUBTERRANEO', 'MIXTO'].includes(clean(record.tipo_trabajo).toUpperCase()));
-    const uniqueWorks = keepLatestByOverlappingParts(works, record => lclParts(record.lcl), record => dateScore(record.fecha_inicio));
-    const repairs = (payload.repairs || []).map(mapRepairRow)
-      .filter(record => record.lcl);
-    const uniqueRepairs = keepLatestWithCoordinates(repairs, record => clean(record.lcl).toUpperCase(), record => dateScore(record.fecha_fin, record.fecha_inicio));
-    return [...uniqueWorks, ...uniqueRepairs.filter(record => !worksLcls.has(clean(record.lcl).toUpperCase()))];
+    const res = await fetch(`/api/obras?_t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+      throw new Error('Respuesta no es CSV (Pestaña no compartida públicamente)');
+    }
+    const raw = parseCsv(text);
+    if (raw.length === 0) return [];
+    return raw.map((r, idx) => mapObrasRow(r, idx));
   } catch (err) {
     console.warn(`No se pudieron cargar las Obras (${err.message}).`);
     return [];
@@ -415,8 +422,18 @@ function iconSvg(tension, color) {
   return `<svg viewBox="0 0 42 34" aria-label="Camión"><path d="M2 7h25v17H2zM27 13h8l5 6v5H27z" fill="${color}" stroke="#17384D" stroke-width="1.4"/><circle cx="11" cy="28" r="3.5" fill="#17384D"/><circle cx="33" cy="28" r="3.5" fill="#17384D"/><path d="M30 15h4l3 4h-7z" fill="#EAF7FD"/></svg>`;
 }
 
-function worksIconSvg(color) {
-  return `<svg viewBox="0 0 40 34" aria-label="Obras"><path d="M8 18c0-7 5.4-12 12-12s12 5 12 12v2H8z" fill="${color}" stroke="#17384D" stroke-width="1.6"/><path d="M5 21h30v5H5z" fill="${color}" stroke="#17384D" stroke-width="1.6"/><path d="M20 6v15M11 17h18" stroke="#17384D" stroke-width="1.4"/></svg>`;
+function worksIconWithSla(color, slaStatus) {
+  const ringClass = slaStatus ? `sla-ring-${slaStatus}` : 'sla-ring-en_plazo';
+  return `
+    <div class="works-marker-wrapper ${ringClass}">
+      <div class="works-halo-ring"></div>
+      <svg viewBox="0 0 40 34" class="works-helmet-svg" aria-label="Obras">
+        <path d="M8 18c0-7 5.4-12 12-12s12 5 12 12v2H8z" fill="${color}" stroke="#17384D" stroke-width="1.6"/>
+        <path d="M5 21h30v5H5z" fill="${color}" stroke="#17384D" stroke-width="1.6"/>
+        <path d="M20 6v15M11 17h18" stroke="#17384D" stroke-width="1.4"/>
+      </svg>
+    </div>
+  `;
 }
 
 function initMap() {
@@ -426,9 +443,9 @@ function initMap() {
 
   markerLayer = L.markerClusterGroup({
     chunkedLoading: true,
-    maxClusterRadius: 50,
-    disableClusteringAtZoom: 16,
+    maxClusterRadius: 40,
     spiderfyOnMaxZoom: true,
+    spiderfyDistanceMultiplier: 1.5,
     showCoverageOnHover: false
   });
   map.addLayer(markerLayer);
@@ -532,35 +549,68 @@ function renderMap() {
   });
 
   const bounds = [];
+  const coordCount = new Map();
+
   visible.forEach(r => {
     if (!isPeruCoordinate(r)) return;
 
+    const isObra = r.tipo === 'Obras';
+    const slaStatus = isObra ? (r.sla?.status || 'en_plazo') : null;
+
     const icon = L.divIcon({
       className: 'custom-map-icon',
-      html: r.tipo === 'Obras' ? worksIconSvg(getCompanyColor(r.contratista)) : iconSvg(r.tension, getCompanyColor(r.contratista)),
-      iconSize: [32, 28],
-      iconAnchor: [16, 24]
+      html: isObra
+        ? worksIconWithSla(getCompanyColor(r.contratista), slaStatus)
+        : iconSvg(r.tension, getCompanyColor(r.contratista)),
+      iconSize: isObra ? [34, 30] : [32, 28],
+      iconAnchor: isObra ? [17, 24] : [16, 24]
     });
 
-    const m = L.marker([r.lat, r.lon], { icon });
-    if (r.tipo === 'Obras') {
+    // Anti-solapamiento de coordenadas idénticas (SEDs / misma ubicación)
+    const coordKey = `${r.lat.toFixed(5)},${r.lon.toFixed(5)}`;
+    const cIdx = coordCount.get(coordKey) || 0;
+    coordCount.set(coordKey, cIdx + 1);
+
+    let drawLat = r.lat;
+    let drawLon = r.lon;
+    if (cIdx > 0) {
+      // Dispersión suave de 6 a 10 metros para visualización contigua al acercar el zoom
+      const angle = cIdx * 2.39996;
+      const dist = 0.000045 * Math.sqrt(cIdx);
+      drawLat += dist * Math.cos(angle);
+      drawLon += dist * Math.sin(angle);
+    }
+
+    const m = L.marker([drawLat, drawLon], { icon });
+    if (isObra) {
+      const slaBadgeHtml = r.sla ? `
+        <div style="margin-bottom:6px">
+          <span class="deadline-badge ${r.sla.status === 'vencida' ? 'deadline-vencida' : r.sla.status === 'por_vencer' ? 'deadline-por_vencer' : 'deadline-en_plazo'}">
+            ${escapeHtml(r.sla.label)}
+          </span>
+        </div>
+      ` : '';
+
       const popupHtml = `
         <div style="min-width:260px;font-size:12px;line-height:1.4">
-          <div style="font-weight:900;color:var(--navy);font-size:14px;margin-bottom:6px">⛑ ${escapeHtml(r.source)}</div>
+          <div style="font-weight:900;color:var(--navy);font-size:14px;margin-bottom:4px">⛑ ${escapeHtml(r.source)}</div>
+          ${slaBadgeHtml}
           <div><b>LCL/ODM:</b> ${escapeHtml(r.lcl)}</div>
           <div><b>Estado:</b> ${escapeHtml(r.estado_original || '-')}</div>
           <div><b>Contratista:</b> <span style="color:${getCompanyColor(r.contratista)};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
           <div><b>Distrito:</b> ${escapeHtml(r.distrito)} | <b>Tipo:</b> ${escapeHtml(r.tipo_trabajo || r.tipo_obra || '-')}</div>
-          <div><b>Fecha:</b> ${escapeHtml(r.fecha_fin || r.fecha_inicio || '-')}</div>
-          ${r.motivo ? `<div><b>Motivo fuera de plazo:</b> ${escapeHtml(r.motivo)}</div>` : ''}
+          <div><b>Fecha Ingreso:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
+          ${r.fecha_fin ? `<div><b>Fecha Atención:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>` : ''}
+          <div><b>Duración:</b> ${escapeHtml(r.intervalo || (r.sla?.days ? `${r.sla.days}d` : '-'))}</div>
           <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">Abrir en Google Maps</a>
         </div>
       `;
       m.bindPopup(popupHtml);
       markerLayer.addLayer(m);
-      bounds.push([r.lat, r.lon]);
+      bounds.push([drawLat, drawLon]);
       return;
     }
+
     const popupHtml = `
       <div style="min-width:260px;font-size:12px;line-height:1.4">
         <div style="font-weight:900;color:var(--navy);font-size:14px;margin-bottom:6px">
@@ -570,8 +620,8 @@ function renderMap() {
         <div><b>SED:</b> ${escapeHtml(r.sed)} (${escapeHtml(r.distrito)})</div>
         <div><b>Contratista:</b> <span style="color:${getCompanyColor(r.contratista)};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
         <div><b>Tensión:</b> ${escapeHtml(r.tension)} | <b>Estado SAP:</b> ${escapeHtml(r.estado_original)}</div>
-        <div><b>Fecha Inicio:</b> ${escapeHtml(r.fecha_inicio || '-')}</div>
-        <div><b>Fecha Fin Real:</b> ${escapeHtml(r.fecha_fin || '-')}</div>
+        <div><b>Fecha Inicio:</b> ${escapeHtml(formatShortDate(r.fecha_inicio))}</div>
+        <div><b>Fecha Fin Real:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>
         <div><b>Antigüedad:</b> ${escapeHtml(r.intervalo || '-')}</div>
         <div><b>Ubicación:</b> <small>${escapeHtml(r.ubicacion_tecnica || '-')}</small></div>
         <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">🗺 Abrir en Google Maps</a>
@@ -579,7 +629,7 @@ function renderMap() {
     `;
     m.bindPopup(popupHtml);
     markerLayer.addLayer(m);
-    bounds.push([r.lat, r.lon]);
+    bounds.push([drawLat, drawLon]);
   });
 
   const worksCount = visible.filter(record => record.tipo === 'Obras' && isPeruCoordinate(record)).length;
@@ -1048,28 +1098,62 @@ function setSlaFilter(status) {
   applyReportFilters('Pendiente');
 }
 
+function setObrasSubTab(subTab) {
+  obrasState.subTab = subTab;
+  obrasState.page = 1;
+  document.querySelectorAll('#obrasSubTabGroup .btn-segmented').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.subtab === subTab);
+  });
+  if ($('chartDayObrasTitle')) {
+    $('chartDayObrasTitle').textContent = subTab === 'Atendido'
+      ? 'Línea de Tiempo por Fecha de Atención'
+      : 'Línea de Tiempo por Fecha de Ingreso';
+  }
+  updateObrasView();
+}
+
 function populateObrasFilters() {
   const fill = (id, values) => {
     const element = $(id);
+    if (!element) return;
     const firstOption = element.firstElementChild.outerHTML;
     element.innerHTML = firstOption + values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
   };
-  fill('obrasFilterSource', [...new Set(obrasRows.map(row => row.source))].sort());
-  fill('obrasFilterCompany', [...new Set(obrasRows.map(row => row.contratista))].sort());
-  fill('obrasFilterDistrict', [...new Set(obrasRows.map(row => row.distrito))].sort());
+  fill('obrasFilterCompany', [...new Set(obrasRows.map(row => row.contratista).filter(Boolean))].sort());
+  fill('obrasFilterDistrict', [...new Set(obrasRows.map(row => row.distrito).filter(Boolean))].sort());
+  fill('obrasFilterType', [...new Set(obrasRows.map(row => row.tipo_trabajo).filter(Boolean))].sort());
 }
 
 function getFilteredObrasRows() {
   const query = obrasState.search.toLowerCase();
-  const { source, company, district, geo } = obrasState.filters;
+  const { dateFrom, dateTo, sla, company, district, type, geo } = obrasState.filters;
+
   return obrasRows.filter(row => {
-    if (source && row.source !== source) return false;
+    // 1. SubTab (Pendiente, Atendido o Todos)
+    if (obrasState.subTab === 'Pendiente' && row.is_ejecutado) return false;
+    if (obrasState.subTab === 'Atendido' && !row.is_ejecutado) return false;
+
+    // 2. Rango de Fechas (Desde / Hasta)
+    const targetDate = (obrasState.subTab === 'Atendido' && row.fecha_fin_date)
+      ? row.fecha_fin_date
+      : row.fecha_inicio_date;
+    if (dateFrom && targetDate && targetDate < dateFrom) return false;
+    if (dateTo && targetDate && targetDate > dateTo) return false;
+
+    // 3. Semáforo SLA
+    if (sla && row.sla && row.sla.status !== sla) return false;
+
+    // 4. Filtros dropdown
     if (company && row.contratista !== company) return false;
     if (district && row.distrito !== district) return false;
+    if (type && row.tipo_trabajo !== type) return false;
     if (geo === 'valid' && !isPeruCoordinate(row)) return false;
     if (geo === 'invalid' && isPeruCoordinate(row)) return false;
+
+    // 5. Búsqueda por texto libre
     if (query && ![row.lcl, row.orden_sistema_origen, row.contratista, row.distrito, row.estado_original, row.tipo_trabajo, row.tipo_obra]
       .some(value => clean(value).toLowerCase().includes(query))) return false;
+
     return true;
   });
 }
@@ -1084,25 +1168,74 @@ function countObrasBy(rows, getKey) {
 
 function updateObrasView() {
   const rows = getFilteredObrasRows();
-  const mapped = rows.filter(isPeruCoordinate).length;
-  const invalid = rows.length - mapped;
-  const complementary = rows.filter(row => row.source === 'Reparación de veredas').length;
+  const total = rows.length;
+  const enPlazo = rows.filter(r => r.sla && r.sla.status === 'en_plazo').length;
+  const porVencer = rows.filter(r => r.sla && r.sla.status === 'por_vencer').length;
+  const vencidas = rows.filter(r => r.sla && r.sla.status === 'vencida').length;
 
-  $('kpiTotalObras').textContent = rows.length.toLocaleString('es-PE');
-  $('kpiMappedObras').textContent = mapped.toLocaleString('es-PE');
-  $('kpiInvalidObras').textContent = invalid.toLocaleString('es-PE');
-  $('kpiRepairObras').textContent = complementary.toLocaleString('es-PE');
-  $('activeFilterCountObras').textContent = `${Object.values(obrasState.filters).filter(Boolean).length + (obrasState.search ? 1 : 0)} filtro(s) activo(s)`;
+  $('kpiTotalObras').textContent = total.toLocaleString('es-PE');
+  $('kpiEnPlazoObras').textContent = enPlazo.toLocaleString('es-PE');
+  $('kpiPorVencerObras').textContent = porVencer.toLocaleString('es-PE');
+  $('kpiVencidasObras').textContent = vencidas.toLocaleString('es-PE');
+
+  const pct = (val) => total > 0 ? `${Math.round((val / total) * 100)}% del total` : '0%';
+  $('kpiFootTotalObras').textContent = `${rows.filter(isPeruCoordinate).length} georreferenciadas`;
+  $('kpiFootEnPlazoObras').textContent = `${pct(enPlazo)} · En plazo`;
+  $('kpiFootPorVencerObras').textContent = `${pct(porVencer)} · Vence hoy (Día 2)`;
+  $('kpiFootVencidasObras').textContent = `${pct(vencidas)} · Plazo superado`;
+
+  const activeCount = Object.values(obrasState.filters).filter(Boolean).length + (obrasState.search ? 1 : 0);
+  $('activeFilterCountObras').textContent = `${activeCount} filtro(s) activo(s)`;
+
+  // Gráfico 1: Línea de tiempo por fechas (DD/MM)
+  const isAtendido = obrasState.subTab === 'Atendido';
+  const getDateLabel = r => formatShortDate(isAtendido && r.fecha_fin ? r.fecha_fin : r.fecha_inicio);
+  const getIsoDate = r => (isAtendido && r.fecha_fin_date ? r.fecha_fin_date : r.fecha_inicio_date) || '';
+
+  const dayCounts = countObrasBy(rows, getDateLabel);
+  delete dayCounts['Sin dato'];
+  delete dayCounts['-'];
+
+  const dayDateMap = new Map();
+  rows.forEach(r => {
+    const lbl = getDateLabel(r);
+    const iso = getIsoDate(r);
+    if (lbl && lbl !== '-' && iso) {
+      if (!dayDateMap.has(lbl) || iso < dayDateMap.get(lbl)) {
+        dayDateMap.set(lbl, iso);
+      }
+    }
+  });
+
+  const sortedDays = Object.entries(dayCounts).sort((a, b) => {
+    const dateA = dayDateMap.get(a[0]) || a[0];
+    const dateB = dayDateMap.get(b[0]) || b[0];
+    return dateA.localeCompare(dateB);
+  });
+
+  renderChartInstance(
+    'chartDayObras',
+    'line',
+    sortedDays.map(item => item[0]),
+    sortedDays.map(item => item[1]),
+    {
+      borderColor: isAtendido ? '#4DA338' : '#F8B319',
+      backgroundColor: isAtendido ? 'rgba(77, 163, 56, 0.12)' : 'rgba(248, 179, 25, 0.12)',
+      tension: 0.3,
+      fill: true
+    }
+  );
 
   const companies = Object.entries(countObrasBy(rows, row => row.contratista)).sort((a, b) => b[1] - a[1]);
   const statuses = Object.entries(countObrasBy(rows, row => row.estado_original)).sort((a, b) => b[1] - a[1]).slice(0, 10);
   const districts = Object.entries(countObrasBy(rows, row => row.distrito)).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const classifications = Object.entries(countObrasBy(rows, row => row.source === 'Reparación de veredas' ? 'REPARACIÓN' : row.tipo_trabajo)).sort((a, b) => b[1] - a[1]);
+  const classifications = Object.entries(countObrasBy(rows, row => row.tipo_trabajo)).sort((a, b) => b[1] - a[1]);
 
   renderChartInstance('chartCompanyObras', 'bar', companies.map(item => item[0]), companies.map(item => item[1]));
-  renderChartInstance('chartStatusObras', 'bar', statuses.map(item => item[0]), statuses.map(item => item[1]), { indexAxis: 'y' });
   renderChartInstance('chartDistrictObras', 'bar', districts.map(item => item[0]), districts.map(item => item[1]), { indexAxis: 'y' });
+  renderChartInstance('chartStatusObras', 'bar', statuses.map(item => item[0]), statuses.map(item => item[1]), { indexAxis: 'y' });
   renderChartInstance('chartTypeObras', 'bar', classifications.map(item => item[0]), classifications.map(item => item[1]));
+
   renderObrasTable(rows);
 }
 
@@ -1112,21 +1245,33 @@ function renderObrasTable(rows) {
   const totalPages = Math.max(1, Math.ceil(rows.length / obrasState.pageSize));
   obrasState.page = Math.min(obrasState.page, totalPages);
   const start = (obrasState.page - 1) * obrasState.pageSize;
+
   rows.slice(start, start + obrasState.pageSize).forEach((row, index) => {
     const tr = document.createElement('tr');
+    if (row.sla && row.sla.status === 'vencida') tr.classList.add('sla-vencida');
+    else if (row.sla && row.sla.status === 'por_vencer') tr.classList.add('sla-por_vencer');
+    else if (row.sla && row.sla.status === 'en_plazo') tr.classList.add('sla-en_plazo');
+
+    const badgeClass = !row.sla ? 'deadline-sin_dato' :
+                       row.sla.status === 'vencida' ? 'deadline-vencida' :
+                       row.sla.status === 'por_vencer' ? 'deadline-por_vencer' :
+                       row.sla.status === 'en_plazo' ? 'deadline-en_plazo' : 'deadline-sin_dato';
+
     tr.innerHTML = `
       <td>${start + index + 1}</td>
       <td><strong style="color:var(--pluz-blue)">${escapeHtml(row.lcl)}</strong></td>
-      <td>${escapeHtml(row.source)}</td>
+      <td><span class="deadline-badge ${badgeClass}">${escapeHtml(row.sla ? row.sla.label : 'Sin dato')}</span></td>
       <td><span style="color:${getCompanyColor(row.contratista)};font-weight:800">${escapeHtml(row.contratista)}</span></td>
       <td>${escapeHtml(row.distrito)}</td>
       <td>${escapeHtml(row.estado_original || '-')}</td>
       <td>${escapeHtml(row.tipo_trabajo || row.tipo_obra || '-')}</td>
-      <td>${escapeHtml(row.fecha_fin || row.fecha_inicio || '-')}</td>
+      <td><b>${escapeHtml(formatShortDate(row.fecha_inicio))}</b></td>
+      <td>${escapeHtml(row.intervalo || (row.sla?.days ? `${row.sla.days}d` : '-'))}</td>
       <td><span class="badge-status-sap ${isPeruCoordinate(row) ? 'badge-sap-cer' : 'badge-sap-lib'}">${isPeruCoordinate(row) ? 'Mapeado' : 'Sin ubicación'}</span></td>
     `;
     body.appendChild(tr);
   });
+
   $('tableCountObras').textContent = `${rows.length.toLocaleString('es-PE')} registros encontrados`;
   $('paginationObras').innerHTML = `
     <button class="btn-secondary-sm" ${obrasState.page <= 1 ? 'disabled' : ''} onclick="changeObrasPage(-1)">◀ Anterior</button>
@@ -1141,21 +1286,74 @@ function changeObrasPage(delta) {
 }
 
 function applyObrasFilters() {
-  obrasState.filters.source = $('obrasFilterSource').value;
+  obrasState.filters.dateFrom = $('obrasDateFrom').value;
+  obrasState.filters.dateTo = $('obrasDateTo').value;
+  obrasState.filters.sla = $('obrasFilterSla').value;
   obrasState.filters.company = $('obrasFilterCompany').value;
   obrasState.filters.district = $('obrasFilterDistrict').value;
+  obrasState.filters.type = $('obrasFilterType').value;
   obrasState.filters.geo = $('obrasFilterGeo').value;
   obrasState.page = 1;
   updateObrasView();
 }
 
 function resetObrasFilters() {
-  ['obrasFilterSource', 'obrasFilterCompany', 'obrasFilterDistrict', 'obrasFilterGeo'].forEach(id => { $(id).value = ''; });
+  $('obrasDateFrom').value = '';
+  $('obrasDateTo').value = '';
+  $('obrasFilterSla').value = '';
+  $('obrasFilterCompany').value = '';
+  $('obrasFilterDistrict').value = '';
+  $('obrasFilterType').value = '';
+  $('obrasFilterGeo').value = '';
   $('tableSearchObras').value = '';
+
   obrasState.search = '';
-  obrasState.filters = { source: '', company: '', district: '', geo: '' };
+  obrasState.filters = {
+    dateFrom: '',
+    dateTo: '',
+    sla: '',
+    company: '',
+    district: '',
+    type: '',
+    geo: ''
+  };
   obrasState.page = 1;
   updateObrasView();
+}
+
+function downloadObrasTable() {
+  const rows = getFilteredObrasRows();
+  if (!rows.length) {
+    alert('No hay registros de obras para descargar.');
+    return;
+  }
+  const headers = ['#', 'LCL/ODM', 'Presupuesto/Ref', 'SubTab', 'Situacion SLA (2d)', 'Contratista', 'Distrito', 'Estado', 'Tipo Trabajo', 'Fecha Ingreso', 'Fecha Atencion', 'Duracion', 'Latitud', 'Longitud'];
+  const csvLines = [headers.join(';')];
+  rows.forEach((r, idx) => {
+    const vals = [
+      idx + 1,
+      r.lcl,
+      r.orden_sistema_origen,
+      r.is_ejecutado ? 'Atendido' : 'Pendiente',
+      r.sla ? r.sla.label : '',
+      r.contratista,
+      r.distrito,
+      r.estado_original,
+      r.tipo_trabajo,
+      formatShortDate(r.fecha_inicio),
+      r.fecha_fin ? formatShortDate(r.fecha_fin) : '',
+      r.intervalo,
+      r.lat,
+      r.lon
+    ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`);
+    csvLines.push(vals.join(';'));
+  });
+
+  const blob = new Blob(["\ufeff" + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `Obras_${obrasState.subTab}_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
 }
 
 // =============================================================
@@ -1247,7 +1445,9 @@ Object.assign(window, {
   changeObrasPage,
   changeReportPage,
   downloadCurrentTable,
+  downloadObrasTable,
   handleTableSort,
   resetObrasFilters,
-  resetReportFilters
+  resetReportFilters,
+  setObrasSubTab
 });
