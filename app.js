@@ -272,6 +272,7 @@ function mapCsvRowToRecord(r, originalIndex) {
       r.FECHA_ACTUALIZACION_SISTEMA || r.fecha_actualizacion_sistema ||
       r.FECHA_ACTUALIZACION || r.fecha_actualizacion
     ),
+    nota_especifica: clean(r.NOTA_ESPECIFICA || r.NOTA_ESPECIFICA_OMS || r.nota_especifica),
     ubicacion_tecnica: clean(r.UBICACION_TECNICA || r.ubicacion_tecnica),
     grupo_hojas_ruta: clean(r.GRUPO_HOJAS_RUTA || r.grupo_hojas_ruta)
   };
@@ -727,7 +728,7 @@ function renderMap() {
         <div><b>Fecha Vencimiento:</b> ${escapeHtml(formatShortDate(regularSla?.dueDate || r.fecha_vencimiento_date))}</div>
         <div><b>Fecha Fin Real:</b> ${escapeHtml(formatShortDate(r.fecha_fin))}</div>
         <div><b>Días transcurridos:</b> ${escapeHtml(regularSla.daysElapsed ?? '-')}</div>
-        <div><b>Ubicación:</b> <small>${escapeHtml(r.ubicacion_tecnica || '-')}</small></div>
+        ${r.tipo === 'Ejecutado' && r.nota_especifica ? `<div><b>Nota específica:</b> <small>${escapeHtml(r.nota_especifica)}</small></div>` : ''}
         <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">🗺 Abrir en Google Maps</a>
       </div>
     `;
@@ -1117,7 +1118,7 @@ function renderReportTable(tipo, filtered) {
       <td>${escapeHtml(formatShortDate(sla?.dueDate || r.fecha_vencimiento_date))}</td>
       <td style="font-weight:600">${escapeHtml(sla?.daysElapsed ?? r.intervalo ?? '-')}</td>
       ${tipo === 'Pendiente' ? `<td>${slaBadge}</td>` : `<td>${escapeHtml(formatShortDate(r.fecha_fin))}</td>`}
-      <td><small style="color:var(--text-secondary)">${escapeHtml(r.ubicacion_tecnica || '-')}</small></td>
+      <td><small style="color:var(--text-secondary)">${escapeHtml(tipo === 'Ejecutado' ? (r.nota_especifica || '-') : (r.ubicacion_tecnica || '-'))}</small></td>
     `;
     tbody.appendChild(tr);
   });
