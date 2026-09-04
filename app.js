@@ -38,6 +38,8 @@ let obrasRows = [];
 let map = null;
 let markerLayer = null;
 let addressMarker = null;
+let mapSearchTimer = null;
+let hasInitialMapFit = false;
 const chartsInst = {};
 
 // Estado de paginación, filtros y ordenamiento de dashboards
@@ -479,7 +481,10 @@ function initMap() {
   map.addLayer(markerLayer);
 
   // Filtros de órdenes y opciones
-  $('mapSearchInput').addEventListener('input', renderMap);
+  $('mapSearchInput').addEventListener('input', () => {
+    clearTimeout(mapSearchTimer);
+    mapSearchTimer = setTimeout(renderMap, 300);
+  });
   $('mapFilterTipo').addEventListener('change', renderMap);
   $('mapFilterContratista').addEventListener('change', renderMap);
   $('mapFilterTension').addEventListener('change', renderMap);
@@ -695,8 +700,11 @@ function renderMap() {
   const worksCount = visible.filter(record => record.tipo === 'Obras' && isPeruCoordinate(record)).length;
   const invalidGeoCount = visible.filter(record => !isPeruCoordinate(record)).length;
   $('mapStatusChip').textContent = `${bounds.length.toLocaleString('es-PE')} en mapa${worksCount ? ` · ${worksCount} obras` : ''}${invalidGeoCount ? ` · ${invalidGeoCount} sin ubicación válida` : ''}`;
-  if (bounds.length > 0 && !addressMarker) {
+  // Centrar sólo una vez al cargar. Los filtros y el buscador conservan
+  // el área que el usuario está revisando; "Centrar órdenes" lo hace a demanda.
+  if (bounds.length > 0 && !addressMarker && !hasInitialMapFit) {
     map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+    hasInitialMapFit = true;
   }
 }
 
