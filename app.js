@@ -232,14 +232,20 @@ function getSlaInfo(record) {
 function mapCsvRowToRecord(r, originalIndex) {
   const lat = parseFloat(clean(r.LATITUD || r.lat || r.Latitud).replace(',', '.'));
   const lon = parseFloat(clean(r.LONGITUD || r.lon || r.Longitud).replace(',', '.'));
-  const tipo = clean(r.TIPO || r.tipo || (clean(r.ESTADO_SAP).toUpperCase() === 'CER' ? 'Ejecutado' : 'Pendiente'));
   const fechaInicio = clean(r.FECHA_INICIO || r.fecha_inicio);
   const fechaFin = clean(r.FECHA_FIN || r.fecha_fin);
   const fechaVencimiento = clean(r.FECHA_VENCIMIENTO || r.fecha_vencimiento);
+  const estadoOriginal = clean(r.ESTADO_SAP || r.estado_original);
+  const tipoOriginal = clean(r.TIPO || r.tipo).toUpperCase();
+  const estadoNormalizado = estadoOriginal.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const tipo = tipoOriginal === 'EJECUTADO' || tipoOriginal === 'ATENDIDO' || Boolean(fechaFin) ||
+    ['ATENDID', 'EJECUTAD', 'CONCLUID', 'FINALIZAD', 'TERMINAD', 'CERRAD', 'RESUELT'].some(estado => estadoNormalizado.includes(estado))
+      ? 'Ejecutado'
+      : 'Pendiente';
   const intervaloOriginal = clean(r.INTERVALO || r.intervalo);
   const intervaloNormalizado = normalizeIntervalString(intervaloOriginal, fechaInicio, fechaFin, tipo);
 
-  const fechaReferencia = (tipo === 'Ejecutado' && fechaFin) ? fechaFin : fechaInicio;
+  const fechaReferencia = tipo === 'Ejecutado' ? fechaFin : fechaInicio;
   const diaKey = parseDateOnly(fechaReferencia) || 'Sin fecha';
 
   // Extraer horas/días numéricos para ordenamiento de antigüedad
@@ -255,8 +261,8 @@ function mapCsvRowToRecord(r, originalIndex) {
     idx: originalIndex + 1,
     orden: clean(r.ORDEN || r.orden),
     orden_sistema_origen: clean(r.ORDEN_ORIGEN || r.ORDEN_SISTEMA_ORIGEN || r.orden_sistema_origen),
-    tipo: tipo === 'Ejecutado' ? 'Ejecutado' : 'Pendiente',
-    estado_original: clean(r.ESTADO_SAP || r.estado_original),
+    tipo,
+    estado_original: estadoOriginal,
     contratista: normalizeContractor(r.CONTRATISTA || r.contratista) || 'Sin contratista',
     tension: clean(r.TENSION || r.tension) || 'Sin nivel',
     sed: clean(r.SED || r.sed) || 'Sin SED',
@@ -428,11 +434,10 @@ async function loadRows() {
     const raw = parseCsv(text);
     if (raw.length === 0) throw new Error('CSV vacío');
 
-    const records = raw
-      .map((r, idx) => mapCsvRowToRecord(r, idx))
-      // Una orden ejecutada sin fecha de fin no debe formar parte del tablero.
+    const records = raw.map((r, idx) => mapCsvRowToRecord(r, idx))
+      // Los atendidos sin fecha de cierre se mantienen visibles para evidenciar el dato faltante.
       // Se mostrará recién cuando la fuente SAP tenga la fecha de cierre completa.
-      .filter(record => record.tipo !== 'Ejecutado' || Boolean(record.fecha_fin_date));
+      ;
     updateDataStatus(records);
     return records;
 
@@ -610,7 +615,8 @@ function renderMap() {
     if (fDist && clean(r.distrito) !== fDist) return false;
 
     // Filtro Rango de Fechas (Desde - Hasta)
-    const targetDate = (r.tipo === 'Ejecutado' && r.fecha_fin_date) ? r.fecha_fin_date : r.fecha_inicio_date;
+    const targetDate = r.tipo === 'Ejecutado' ? r.fecha_fin_date : r.fecha_inicio_date;
+    if (r.tipo === 'Ejecutado' && (fDateFrom || fDateTo) && !targetDate) return false;
     if (fDateFrom && targetDate && targetDate < fDateFrom) return false;
     if (fDateTo && targetDate && targetDate > fDateTo) return false;
 
@@ -918,7 +924,8 @@ function getFilteredReportRows(tipo) {
     }
 
     // Filtro de Rango de Fechas (Desde - Hasta)
-    const targetDate = (tipo === 'Ejecutado' && r.fecha_fin_date) ? r.fecha_fin_date : r.fecha_inicio_date;
+    const targetDate = tipo === 'Ejecutado' ? r.fecha_fin_date : r.fecha_inicio_date;
+    if (tipo === 'Ejecutado' && (dateFrom || dateTo) && !targetDate) return false;
     if (dateFrom && targetDate && targetDate < dateFrom) return false;
     if (dateTo && targetDate && targetDate > dateTo) return false;
 
@@ -1120,9 +1127,11 @@ function renderReportTable(tipo, filtered) {
       <td>${escapeHtml(r.distrito)}</td>
       <td>${tensionBadge}</td>
       <td>${escapeHtml(formatShortDate(r.fecha_inicio))}</td>
-      <td>${escapeHtml(formatShortDate(sla?.dueDate || r.fecha_vencimiento_date))}</td>
-      <td style="font-weight:600">${escapeHtml(sla?.daysElapsed ?? r.intervalo ?? '-')}</td>
-      ${tipo === 'Ejecutado' ? `<td>${escapeHtml(formatShortDate(r.fecha_fin))}</td>` : ''}
+      ${tipo === 'Ejecutado'
+        ? `<td>${escapeHtml(r.fecha_fin ? formatShortDate(r.fecha_fin) : '')}</td>
+           <td style="font-weight:600">${escapeHtml(r.fecha_fin_date ? (sla?.daysElapsed ?? r.intervalo ?? '-') : 'Sin fecha fin')}</td>`
+        : `<td>${escapeHtml(formatShortDate(sla?.dueDate || r.fecha_vencimiento_date))}</td>
+           <td style="font-weight:600">${escapeHtml(sla?.daysElapsed ?? r.intervalo ?? '-')}</td>`}
       ${tipo === 'Pendiente' ? `<td><small style="color:var(--text-secondary)">${escapeHtml(r.ubicacion_tecnica || '-')}</small></td>` : ''}
     `;
     tbody.appendChild(tr);
