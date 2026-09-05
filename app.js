@@ -64,7 +64,7 @@ const obrasState = {
   page: 1,
   pageSize: 50,
   search: '',
-  subTab: 'Pendiente', // 'Pendiente' | 'Atendido' | 'Todos'
+  subTab: 'Pendiente', // 'Pendiente' | 'Ejecutado' | 'Todos'
   sort: { column: 'idx', direction: 'asc' },
   filters: {
     dateFrom: '',
@@ -323,7 +323,7 @@ function getObrasSla(record) {
     if (endStr) {
       targetDate = endStr;
     } else {
-      return { status: 'en_plazo', label: 'Atendido', days: 0, dueDate: record.fecha_vencimiento_date || addCalendarDays(startStr, SLA_DAYS) };
+      return { status: 'en_plazo', label: 'Ejecutado', days: 0, dueDate: record.fecha_vencimiento_date || addCalendarDays(startStr, SLA_DAYS) };
     }
   } else {
     targetDate = getTodayIso();
@@ -334,9 +334,9 @@ function getObrasSla(record) {
 
   if (record.is_ejecutado) {
     if (diffDays <= 2) {
-      return { status: 'en_plazo', label: `Atendido en plazo · ${diffDays} días`, days: diffDays, dueDate };
+      return { status: 'en_plazo', label: `Ejecutado en plazo · ${diffDays} días`, days: diffDays, dueDate };
     }
-    return { status: 'vencida', label: `Atendido fuera de plazo · ${diffDays} días`, days: diffDays, dueDate };
+    return { status: 'vencida', label: `Ejecutado fuera de plazo · ${diffDays} días`, days: diffDays, dueDate };
   }
 
   // Pendiente: Plazo de 2 días
@@ -377,7 +377,10 @@ function mapObrasRow(r, index) {
   const record = {
     idx: index + 1,
     source,
-    tipo: 'Obras',
+    // Obras es el origen del registro, no un estado operativo. En el mapa se
+    // integra con Pendientes o Ejecutados según su estado real.
+    tipo: isEjecutado ? 'Ejecutado' : 'Pendiente',
+    es_obra: true,
     tension: 'OBRAS',
     is_ejecutado: isEjecutado,
     orden,
@@ -488,7 +491,7 @@ function updateDataStatus(records) {
     dateStyle: 'short',
     timeStyle: 'short'
   }).format(latestUpdate);
-  label.textContent = `Actualizado ${stamp} · ${records.length.toLocaleString('es-PE')} reg.`;
+  label.textContent = `Actualizado ${stamp}`;
   $('lastUpdate').title = 'Fecha más reciente informada por la fuente de datos.';
 }
 
@@ -635,7 +638,7 @@ function renderMap() {
   visible.forEach(r => {
     if (!isPeruCoordinate(r)) return;
 
-    const isObra = r.tipo === 'Obras';
+    const isObra = Boolean(r.es_obra);
     let slaStatus = 'en_plazo';
 
     if (isObra) {
@@ -747,9 +750,8 @@ function renderMap() {
     bounds.push([drawLat, drawLon]);
   });
 
-  const worksCount = visible.filter(record => record.tipo === 'Obras' && isPeruCoordinate(record)).length;
   const invalidGeoCount = visible.filter(record => !isPeruCoordinate(record)).length;
-  $('mapStatusChip').textContent = `${bounds.length.toLocaleString('es-PE')} en mapa${worksCount ? ` · ${worksCount} obras` : ''}${invalidGeoCount ? ` · ${invalidGeoCount} sin ubicación válida` : ''}`;
+  $('mapStatusChip').textContent = `${bounds.length.toLocaleString('es-PE')} en mapa${invalidGeoCount ? ` · ${invalidGeoCount} sin ubicación válida` : ''}`;
   // Centrar sólo una vez al cargar. Los filtros y el buscador conservan
   // el área que el usuario está revisando; "Centrar órdenes" lo hace a demanda.
   if (bounds.length > 0 && !addressMarker && !hasInitialMapFit) {
@@ -1241,20 +1243,20 @@ function setObrasSubTab(subTab) {
     btn.classList.toggle('active', btn.dataset.subtab === subTab);
   });
   if ($('chartDayObrasTitle')) {
-    $('chartDayObrasTitle').textContent = subTab === 'Atendido'
+  $('chartDayObrasTitle').textContent = subTab === 'Ejecutado'
       ? 'Línea de Tiempo por Fecha de Atención'
       : 'Línea de Tiempo por Fecha de Ingreso';
   }
-  const isAtendido = subTab === 'Atendido';
+  const isEjecutado = subTab === 'Ejecutado';
   const fechaHeader = $('thObrasFechaPrincipal');
   const duracionHeader = $('thObrasDuracion');
   if (fechaHeader) {
-    fechaHeader.dataset.sort = isAtendido ? 'fecha_fin' : 'fecha_vencimiento_date';
+    fechaHeader.dataset.sort = isEjecutado ? 'fecha_fin' : 'fecha_vencimiento_date';
     fechaHeader.onclick = () => handleObrasSort(fechaHeader.dataset.sort);
-    fechaHeader.innerHTML = `${isAtendido ? 'Fecha fin' : 'Vencimiento'} <span class="sort-icon"></span>`;
+    fechaHeader.innerHTML = `${isEjecutado ? 'Fecha fin' : 'Vencimiento'} <span class="sort-icon"></span>`;
   }
   if (duracionHeader) {
-    duracionHeader.innerHTML = `${isAtendido ? 'Días de atención' : 'Días transcurridos'} <span class="sort-icon"></span>`;
+    duracionHeader.innerHTML = `${isEjecutado ? 'Días de ejecución' : 'Días transcurridos'} <span class="sort-icon"></span>`;
   }
   updateObrasView();
 }
@@ -1276,12 +1278,12 @@ function getFilteredObrasRows() {
   const { dateFrom, dateTo, sla, company, district, type, geo } = obrasState.filters;
 
   return obrasRows.filter(row => {
-    // 1. SubTab (Pendiente, Atendido o Todos)
+    // 1. SubTab (Pendiente, Ejecutado o Todos)
     if (obrasState.subTab === 'Pendiente' && row.is_ejecutado) return false;
-    if (obrasState.subTab === 'Atendido' && !row.is_ejecutado) return false;
+    if (obrasState.subTab === 'Ejecutado' && !row.is_ejecutado) return false;
 
     // 2. Rango de Fechas (Desde / Hasta)
-    const targetDate = obrasState.subTab === 'Atendido'
+    const targetDate = obrasState.subTab === 'Ejecutado'
       ? row.fecha_fin_date
       : row.fecha_inicio_date;
     if (dateFrom && targetDate && targetDate < dateFrom) return false;
@@ -1335,12 +1337,12 @@ function updateObrasView() {
   $('activeFilterCountObras').textContent = `${activeCount} filtro(s) activo(s)`;
 
   // Gráfico 1: Línea de tiempo por fechas (DD/MM)
-  const isAtendido = obrasState.subTab === 'Atendido';
-  const getDateLabel = r => formatShortDate(isAtendido ? r.fecha_fin : r.fecha_inicio);
-  const getIsoDate = r => isAtendido ? r.fecha_fin_date : r.fecha_inicio_date;
+  const isEjecutado = obrasState.subTab === 'Ejecutado';
+  const getDateLabel = r => formatShortDate(isEjecutado ? r.fecha_fin : r.fecha_inicio);
+  const getIsoDate = r => isEjecutado ? r.fecha_fin_date : r.fecha_inicio_date;
 
   // La línea de tiempo de atención solo usa cierres con fecha verificable.
-  const rowsForTimeline = isAtendido ? rows.filter(row => row.fecha_fin_date) : rows;
+  const rowsForTimeline = isEjecutado ? rows.filter(row => row.fecha_fin_date) : rows;
   const dayCounts = countObrasBy(rowsForTimeline, getDateLabel);
   delete dayCounts['Sin dato'];
   delete dayCounts['-'];
@@ -1368,8 +1370,8 @@ function updateObrasView() {
     sortedDays.map(item => item[0]),
     sortedDays.map(item => item[1]),
     {
-      borderColor: isAtendido ? '#4DA338' : '#F8B319',
-      backgroundColor: isAtendido ? 'rgba(77, 163, 56, 0.12)' : 'rgba(248, 179, 25, 0.12)',
+      borderColor: isEjecutado ? '#4DA338' : '#F8B319',
+      backgroundColor: isEjecutado ? 'rgba(77, 163, 56, 0.12)' : 'rgba(248, 179, 25, 0.12)',
       tension: 0.3,
       fill: true
     }
@@ -1482,7 +1484,7 @@ function renderObrasTable(rows) {
       <td>${escapeHtml(row.estado_original || '-')}</td>
       <td>${escapeHtml(row.tipo_trabajo || row.tipo_obra || '-')}</td>
       <td><b>${escapeHtml(formatShortDate(row.fecha_inicio))}</b></td>
-      ${obrasState.subTab === 'Atendido'
+      ${obrasState.subTab === 'Ejecutado'
         ? `<td><b>${escapeHtml(row.fecha_fin ? formatShortDate(row.fecha_fin) : '')}</b></td>
            <td>${escapeHtml(row.fecha_fin_date ? (row.sla?.days ?? '-') : 'Sin fecha fin')}</td>`
         : `<td><b>${escapeHtml(formatShortDate(row.sla?.dueDate || row.fecha_vencimiento_date))}</b></td>
@@ -1554,7 +1556,7 @@ function downloadObrasTable() {
       idx + 1,
       r.lcl,
       r.orden_sistema_origen,
-      r.is_ejecutado ? 'Atendido' : 'Pendiente',
+      r.is_ejecutado ? 'Ejecutado' : 'Pendiente',
       r.sla ? r.sla.label : '',
       r.contratista,
       r.distrito,
