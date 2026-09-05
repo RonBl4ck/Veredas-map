@@ -1245,6 +1245,17 @@ function setObrasSubTab(subTab) {
       ? 'Línea de Tiempo por Fecha de Atención'
       : 'Línea de Tiempo por Fecha de Ingreso';
   }
+  const isAtendido = subTab === 'Atendido';
+  const fechaHeader = $('thObrasFechaPrincipal');
+  const duracionHeader = $('thObrasDuracion');
+  if (fechaHeader) {
+    fechaHeader.dataset.sort = isAtendido ? 'fecha_fin' : 'fecha_vencimiento_date';
+    fechaHeader.onclick = () => handleObrasSort(fechaHeader.dataset.sort);
+    fechaHeader.innerHTML = `${isAtendido ? 'Fecha fin' : 'Vencimiento'} <span class="sort-icon"></span>`;
+  }
+  if (duracionHeader) {
+    duracionHeader.innerHTML = `${isAtendido ? 'Días de atención' : 'Días transcurridos'} <span class="sort-icon"></span>`;
+  }
   updateObrasView();
 }
 
@@ -1267,9 +1278,7 @@ function getFilteredObrasRows() {
   return obrasRows.filter(row => {
     // 1. SubTab (Pendiente, Atendido o Todos)
     if (obrasState.subTab === 'Pendiente' && row.is_ejecutado) return false;
-    // Una atención solo es válida visualmente cuando tiene fecha de cierre.
-    // Así se evita que un ingreso se contabilice por error como atención.
-    if (obrasState.subTab === 'Atendido' && (!row.is_ejecutado || !row.fecha_fin_date)) return false;
+    if (obrasState.subTab === 'Atendido' && !row.is_ejecutado) return false;
 
     // 2. Rango de Fechas (Desde / Hasta)
     const targetDate = obrasState.subTab === 'Atendido'
@@ -1330,12 +1339,14 @@ function updateObrasView() {
   const getDateLabel = r => formatShortDate(isAtendido ? r.fecha_fin : r.fecha_inicio);
   const getIsoDate = r => isAtendido ? r.fecha_fin_date : r.fecha_inicio_date;
 
-  const dayCounts = countObrasBy(rows, getDateLabel);
+  // La línea de tiempo de atención solo usa cierres con fecha verificable.
+  const rowsForTimeline = isAtendido ? rows.filter(row => row.fecha_fin_date) : rows;
+  const dayCounts = countObrasBy(rowsForTimeline, getDateLabel);
   delete dayCounts['Sin dato'];
   delete dayCounts['-'];
 
   const dayDateMap = new Map();
-  rows.forEach(r => {
+  rowsForTimeline.forEach(r => {
     const lbl = getDateLabel(r);
     const iso = getIsoDate(r);
     if (lbl && lbl !== '-' && iso) {
@@ -1471,8 +1482,11 @@ function renderObrasTable(rows) {
       <td>${escapeHtml(row.estado_original || '-')}</td>
       <td>${escapeHtml(row.tipo_trabajo || row.tipo_obra || '-')}</td>
       <td><b>${escapeHtml(formatShortDate(row.fecha_inicio))}</b></td>
-      <td><b>${escapeHtml(formatShortDate(row.sla?.dueDate || row.fecha_vencimiento_date))}</b></td>
-      <td>${escapeHtml(row.sla?.days ?? '-')}</td>
+      ${obrasState.subTab === 'Atendido'
+        ? `<td><b>${escapeHtml(row.fecha_fin ? formatShortDate(row.fecha_fin) : '')}</b></td>
+           <td>${escapeHtml(row.fecha_fin_date ? (row.sla?.days ?? '-') : 'Sin fecha fin')}</td>`
+        : `<td><b>${escapeHtml(formatShortDate(row.sla?.dueDate || row.fecha_vencimiento_date))}</b></td>
+           <td>${escapeHtml(row.sla?.days ?? '-')}</td>`}
       <td><span class="badge-status-sap ${isPeruCoordinate(row) ? 'badge-sap-cer' : 'badge-sap-lib'}">${isPeruCoordinate(row) ? 'Mapeado' : 'Sin ubicación'}</span></td>
     `;
     body.appendChild(tr);
