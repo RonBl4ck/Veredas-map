@@ -152,7 +152,18 @@
           </div>
         </div>
 
-        <!-- 2. Buscador de calle, colegio, lugar o coordenadas independiente -->
+        <!-- 2. Buscador exacto del maestro completo de suministros -->
+        <div class="filter-field supply-search-field">
+          <label for="mapSupplyInput">Ubicar suministro</label>
+          <div class="address-input-wrap">
+            <input id="mapSupplyInput" type="search" inputmode="numeric" autocomplete="off" placeholder="Ej: 1000000">
+            <button id="btnMapSearchSupply" type="button" class="btn-supply-go" title="Buscar suministro y centrar en el mapa" aria-label="Buscar suministro">⚡</button>
+          </div>
+          <span id="mapSupplyStatus" class="supply-search-status" role="status" aria-live="polite"></span>
+          <button id="btnClearSupplyPin" type="button" class="btn-link-sm" style="display:none">✕ Quitar marcador de suministro</button>
+        </div>
+
+        <!-- 3. Buscador de calle, colegio, lugar o coordenadas independiente -->
         <div class="filter-field">
           <label for="mapAddressInput">Ubicar calle, colegio o coordenadas</label>
           <div class="address-input-wrap">
@@ -162,7 +173,7 @@
           <button id="btnClearAddressPin" type="button" class="btn-link-sm" style="display:none">✕ Quitar marcador de ubicación</button>
         </div>
 
-        <!-- 3. Rango de Fechas -->
+        <!-- 4. Rango de Fechas -->
         <div class="filter-field">
           <label class="section-label">Rango de Fechas</label>
           <div class="date-range-grid">

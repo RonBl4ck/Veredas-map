@@ -1,0 +1,11 @@
+{
+  "name": "veredas-map",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "postgres": "3.4.9"
+  }
+}

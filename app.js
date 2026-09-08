@@ -1,6 +1,7 @@
 import { initAuth as initAuthModule } from './js/auth.js';
 import { bindDashboardActions } from './js/dashboard-actions.js';
 import { byId } from './js/dom.js';
+import { lookupSupply, SupplyLookupError } from './js/supply-search.js';
 
 /**
  * Aplicación Frontend - Control de Veredas
@@ -9,7 +10,7 @@ import { byId } from './js/dom.js';
  * Incluye:
  *  - Autenticación dinámica vía Google Sheets (Hoja ACCESO).
  *  - Carga de datos en vivo desde Google Sheets publicado en CSV (Hoja BASE_VEREDAS) con fallback local.
- *  - Vista 1: Mapa interactivo en pantalla completa con filtros, buscador de dirección independiente y rango de fechas.
+ *  - Vista 1: Mapa interactivo con filtros y buscadores independientes de suministro y dirección.
  *  - Vista 2: Indicadores ejecutivos para Órdenes Pendientes con Chart.js, filtros de fecha de x a y, y tabla ordenable.
  *  - Vista 3: Indicadores ejecutivos para Órdenes Ejecutadas con Chart.js, filtros de fecha de x a y, y tabla ordenable.
  */
@@ -38,6 +39,7 @@ let obrasRows = [];
 let map = null;
 let markerLayer = null;
 let addressMarker = null;
+let supplyMarker = null;
 let mapSearchTimer = null;
 let hasInitialMapFit = false;
 const chartsInst = {};
@@ -559,6 +561,13 @@ function initMap() {
     }
   });
 
+  // Buscador independiente del maestro completo de suministros.
+  $('btnMapSearchSupply').addEventListener('click', searchSupplyOnMap);
+  $('mapSupplyInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') searchSupplyOnMap();
+  });
+  $('btnClearSupplyPin').addEventListener('click', clearSupplyMarker);
+
   // Buscador independiente de calle / dirección (NO filtra órdenes)
   $('btnMapSearchAddress').addEventListener('click', searchAddressOnMap);
   $('mapAddressInput').addEventListener('keydown', (e) => {
@@ -754,9 +763,65 @@ function renderMap() {
   $('mapStatusChip').textContent = `${bounds.length.toLocaleString('es-PE')} en mapa${invalidGeoCount ? ` · ${invalidGeoCount} sin ubicación válida` : ''}`;
   // Centrar sólo una vez al cargar. Los filtros y el buscador conservan
   // el área que el usuario está revisando; "Centrar órdenes" lo hace a demanda.
-  if (bounds.length > 0 && !addressMarker && !hasInitialMapFit) {
+  if (bounds.length > 0 && !addressMarker && !supplyMarker && !hasInitialMapFit) {
     map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
     hasInitialMapFit = true;
+  }
+}
+
+function setSupplyLookupStatus(message, state = '') {
+  const status = $('mapSupplyStatus');
+  status.textContent = message;
+  status.dataset.state = state;
+}
+
+function clearSupplyMarker() {
+  if (supplyMarker) {
+    map.removeLayer(supplyMarker);
+    supplyMarker = null;
+  }
+  $('mapSupplyInput').value = '';
+  $('btnClearSupplyPin').style.display = 'none';
+  setSupplyLookupStatus('');
+}
+
+async function searchSupplyOnMap() {
+  const button = $('btnMapSearchSupply');
+  button.disabled = true;
+  setSupplyLookupStatus('Buscando suministro…', 'loading');
+
+  try {
+    const supply = await lookupSupply($('mapSupplyInput').value);
+    if (supplyMarker) map.removeLayer(supplyMarker);
+
+    const icon = L.divIcon({
+      className: 'supply-map-icon',
+      html: '<span aria-hidden="true">⚡</span>',
+      iconSize: [38, 46],
+      iconAnchor: [19, 43],
+      popupAnchor: [0, -40]
+    });
+    supplyMarker = L.marker([supply.latitud, supply.longitud], { icon }).addTo(map);
+    supplyMarker.bindPopup(`
+      <div class="supply-popup">
+        <b>⚡ Suministro ${escapeHtml(supply.suministro)}</b>
+        <span>Latitud: ${escapeHtml(supply.latitud.toFixed(7))}</span>
+        <span>Longitud: ${escapeHtml(supply.longitud.toFixed(7))}</span>
+        <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${supply.latitud},${supply.longitud}" target="_blank" rel="noopener noreferrer">Abrir en Google Maps</a>
+      </div>
+    `).openPopup();
+
+    $('mapSupplyInput').value = supply.suministro;
+    $('btnClearSupplyPin').style.display = 'inline-block';
+    setSupplyLookupStatus(`Suministro ${supply.suministro} ubicado.`, 'success');
+    map.setView([supply.latitud, supply.longitud], 18);
+  } catch (error) {
+    const message = error instanceof SupplyLookupError
+      ? error.message
+      : 'No se pudo consultar el suministro.';
+    setSupplyLookupStatus(message, 'error');
+  } finally {
+    button.disabled = false;
   }
 }
 
