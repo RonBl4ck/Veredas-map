@@ -1,6 +1,7 @@
 import { initAuth as initAuthModule } from './js/auth.js';
 import { bindDashboardActions } from './js/dashboard-actions.js';
 import { byId } from './js/dom.js';
+import { filterMapRows } from './js/map-filters.js';
 import { lookupSupply, SupplyLookupError } from './js/supply-search.js';
 
 /**
@@ -620,25 +621,14 @@ function renderMap() {
   const fDateFrom = $('mapDateFrom').value;
   const fDateTo = $('mapDateTo').value;
 
-  const visible = mapRows.filter(r => {
-    if (fTipo && r.tipo !== fTipo) return false;
-    if (fComp && clean(r.contratista) !== fComp) return false;
-    if (fVolt && clean(r.tension) !== fVolt) return false;
-    if (fDist && clean(r.distrito) !== fDist) return false;
-
-    // Filtro Rango de Fechas (Desde - Hasta)
-    const targetDate = r.tipo === 'Ejecutado' ? r.fecha_fin_date : r.fecha_inicio_date;
-    if (r.tipo === 'Ejecutado' && (fDateFrom || fDateTo) && !targetDate) return false;
-    if (fDateFrom && targetDate && targetDate < fDateFrom) return false;
-    if (fDateTo && targetDate && targetDate > fDateTo) return false;
-
-    // Búsqueda de órdenes/SED
-    if (q) {
-      const match = [r.orden, r.orden_sistema_origen, r.lcl, r.sed, r.distrito, r.contratista, r.ubicacion_tecnica]
-        .some(v => clean(v).toLowerCase().includes(q));
-      if (!match) return false;
-    }
-    return true;
+  const visible = filterMapRows(mapRows, {
+    query: q,
+    tipo: fTipo,
+    contractor: fComp,
+    tension: fVolt,
+    district: fDist,
+    dateFrom: fDateFrom,
+    dateTo: fDateTo
   });
 
   const bounds = [];
