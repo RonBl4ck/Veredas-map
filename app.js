@@ -276,7 +276,7 @@ function mapCsvRowToRecord(r, originalIndex) {
   const intervaloOriginal = clean(r.INTERVALO || r.intervalo);
   const intervaloNormalizado = normalizeIntervalString(intervaloOriginal, fechaInicio, fechaFin, tipo);
 
-  const fechaReferencia = tipo === 'Ejecutado' ? fechaFin : fechaInicio;
+  const fechaReferencia = fechaInicio;
   const diaKey = parseDateOnly(fechaReferencia) || 'Sin fecha';
 
   // Extraer horas/días numéricos para ordenamiento de antigüedad
@@ -1184,7 +1184,7 @@ function populateReportFilters(tipo) {
 
     if (monthFromSelect || monthToSelect) {
       const months = [...new Set(
-        rows.map(r => r.fecha_fin_date ? r.fecha_fin_date.slice(0, 7) : '').filter(Boolean)
+        rows.map(r => r.fecha_inicio_date ? r.fecha_inicio_date.slice(0, 7) : '').filter(Boolean)
       )].sort().reverse();
 
       const monthNames = [
@@ -1233,10 +1233,10 @@ function getFilteredReportRows(tipo) {
       if (slaInfo.status !== sla) return false;
     }
 
-    // Filtro de Rango de Fechas / Meses
-    const targetDate = tipo === 'Ejecutado' ? r.fecha_fin_date : r.fecha_inicio_date;
+    // Filtro de Rango de Fechas / Meses (basado en fecha_inicio_date)
+    const targetDate = r.fecha_inicio_date;
     const hasAnyDateFilter = Boolean(dateFrom || dateTo || month || monthFrom || monthTo);
-    if (tipo === 'Ejecutado' && hasAnyDateFilter && !targetDate) return false;
+    if (hasAnyDateFilter && !targetDate) return false;
 
     // Rango de fechas por día
     if (dateFrom && targetDate && targetDate < dateFrom) return false;
@@ -1592,7 +1592,7 @@ function applyMonthPreset(tipo, preset) {
   if (dateToEl) dateToEl.value = '';
 
   const rows = allRows.filter(r => r.tipo === tipo);
-  const targetDateKey = tipo === 'Ejecutado' ? 'fecha_fin_date' : 'fecha_inicio_date';
+  const targetDateKey = 'fecha_inicio_date';
   const availableMonths = [...new Set(
     rows.map(r => r[targetDateKey] ? r[targetDateKey].slice(0, 7) : '').filter(Boolean)
   )].sort();

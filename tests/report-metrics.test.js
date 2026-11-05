@@ -46,35 +46,35 @@ test('calculateContractorAvgDays omite órdenes sin fecha válida y maneja regis
   assert.deepEqual(calculateContractorAvgDays([]), []);
 });
 
-test('filterReportRowsByDate filtra por mes específico', () => {
+test('filterReportRowsByDate filtra por mes específico basado en fecha de ingreso', () => {
   const rows = [
-    { orden: 'O-1', tipo: 'Ejecutado', fecha_fin_date: '2026-08-15' },
-    { orden: 'O-2', tipo: 'Ejecutado', fecha_fin_date: '2026-09-02' },
-    { orden: 'O-3', tipo: 'Ejecutado', fecha_fin_date: '2026-09-28' },
-    { orden: 'O-4', tipo: 'Ejecutado', fecha_fin_date: '2026-10-05' }
+    { orden: 'O-1', tipo: 'Ejecutado', fecha_inicio_date: '2026-08-15' },
+    { orden: 'O-2', tipo: 'Ejecutado', fecha_inicio_date: '2026-09-02' },
+    { orden: 'O-3', tipo: 'Ejecutado', fecha_inicio_date: '2026-09-28' },
+    { orden: 'O-4', tipo: 'Ejecutado', fecha_inicio_date: '2026-10-05' }
   ];
 
   const sept = filterReportRowsByDate(rows, { month: '2026-09' });
   assert.deepEqual(sept.map(r => r.orden), ['O-2', 'O-3']);
 });
 
-test('filterReportRowsByDate filtra por rango de meses', () => {
+test('filterReportRowsByDate filtra por rango de meses basado en fecha de ingreso', () => {
   const rows = [
-    { orden: 'O-1', tipo: 'Ejecutado', fecha_fin_date: '2026-07-20' },
-    { orden: 'O-2', tipo: 'Ejecutado', fecha_fin_date: '2026-08-10' },
-    { orden: 'O-3', tipo: 'Ejecutado', fecha_fin_date: '2026-09-15' },
-    { orden: 'O-4', tipo: 'Ejecutado', fecha_fin_date: '2026-10-01' },
-    { orden: 'O-5', tipo: 'Ejecutado', fecha_fin_date: '2026-11-02' }
+    { orden: 'O-1', tipo: 'Ejecutado', fecha_inicio_date: '2026-07-20' },
+    { orden: 'O-2', tipo: 'Ejecutado', fecha_inicio_date: '2026-08-10' },
+    { orden: 'O-3', tipo: 'Ejecutado', fecha_inicio_date: '2026-09-15' },
+    { orden: 'O-4', tipo: 'Ejecutado', fecha_inicio_date: '2026-10-01' },
+    { orden: 'O-5', tipo: 'Ejecutado', fecha_inicio_date: '2026-11-02' }
   ];
 
   const range = filterReportRowsByDate(rows, { monthFrom: '2026-08', monthTo: '2026-10' });
   assert.deepEqual(range.map(r => r.orden), ['O-2', 'O-3', 'O-4']);
 });
 
-test('filterReportRowsByDate omite órdenes ejecutadas sin fecha fin cuando hay filtros activos', () => {
+test('filterReportRowsByDate omite órdenes sin fecha inicio cuando hay filtros activos', () => {
   const rows = [
-    { orden: 'O-Valida', tipo: 'Ejecutado', fecha_fin_date: '2026-10-15' },
-    { orden: 'O-SinFecha', tipo: 'Ejecutado', fecha_fin_date: '' }
+    { orden: 'O-Valida', tipo: 'Ejecutado', fecha_inicio_date: '2026-10-15' },
+    { orden: 'O-SinFecha', tipo: 'Ejecutado', fecha_inicio_date: '' }
   ];
 
   const filtered = filterReportRowsByDate(rows, { month: '2026-10' });

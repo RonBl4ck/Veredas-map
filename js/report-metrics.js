@@ -39,15 +39,16 @@ export function calculateContractorAvgDays(rows) {
 }
 
 /**
- * Filters rows by exact dates (dateFrom/dateTo) and month / month range (month, monthFrom/monthTo).
+ * Filters rows by exact dates (dateFrom/dateTo) and month / month range (month, monthFrom/monthTo)
+ * based on fecha_inicio_date (Fecha de Ingreso).
  */
 export function filterReportRowsByDate(rows, filters = {}) {
-  const { dateFrom = '', dateTo = '', month = '', monthFrom = '', monthTo = '', tipo = 'Ejecutado' } = filters;
+  const { dateFrom = '', dateTo = '', month = '', monthFrom = '', monthTo = '' } = filters;
   const hasAnyDateFilter = Boolean(dateFrom || dateTo || month || monthFrom || monthTo);
 
   return rows.filter((r) => {
-    const targetDate = tipo === 'Ejecutado' ? r.fecha_fin_date : r.fecha_inicio_date;
-    if (tipo === 'Ejecutado' && hasAnyDateFilter && !targetDate) return false;
+    const targetDate = r.fecha_inicio_date;
+    if (hasAnyDateFilter && !targetDate) return false;
 
     // Rango de fechas por día
     if (dateFrom && targetDate && targetDate < dateFrom) return false;
