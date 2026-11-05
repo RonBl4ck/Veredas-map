@@ -1103,8 +1103,10 @@ function populateReportFilters(tipo) {
   fill(`repFilterDistrict${tipo}`, districts);
 
   if (tipo === 'Ejecutado') {
-    const monthSelect = $(`repFilterMonth${tipo}`);
-    if (monthSelect) {
+    const monthFromSelect = $(`repMonthFrom${tipo}`);
+    const monthToSelect = $(`repMonthTo${tipo}`);
+
+    if (monthFromSelect || monthToSelect) {
       const months = [...new Set(
         rows.map(r => r.fecha_fin_date ? r.fecha_fin_date.slice(0, 7) : '').filter(Boolean)
       )].sort().reverse();
@@ -1120,8 +1122,14 @@ function populateReportFilters(tipo) {
         return `${monthNames[idx] || m} ${y}`;
       };
 
-      monthSelect.innerHTML = '<option value="">Todos los meses</option>' +
-        months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+      const optionsHtml = months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+
+      if (monthFromSelect) {
+        monthFromSelect.innerHTML = '<option value="">Inicio</option>' + optionsHtml;
+      }
+      if (monthToSelect) {
+        monthToSelect.innerHTML = '<option value="">Fin</option>' + optionsHtml;
+      }
     }
   }
 }
@@ -1421,7 +1429,6 @@ function applyReportFilters(tipo) {
   state.filters.sla = tipo === 'Pendiente' ? ($(`repFilterSlaPendiente`)?.value || '') : '';
   state.filters.dateFrom = $(`repDateFrom${tipo}`)?.value || '';
   state.filters.dateTo = $(`repDateTo${tipo}`)?.value || '';
-  state.filters.month = $(`repFilterMonth${tipo}`)?.value || '';
   state.filters.monthFrom = $(`repMonthFrom${tipo}`)?.value || '';
   state.filters.monthTo = $(`repMonthTo${tipo}`)?.value || '';
   state.page = 1;
@@ -1441,7 +1448,6 @@ function resetReportFilters(tipo) {
   }
   if ($(`repDateFrom${tipo}`)) $(`repDateFrom${tipo}`).value = '';
   if ($(`repDateTo${tipo}`)) $(`repDateTo${tipo}`).value = '';
-  if ($(`repFilterMonth${tipo}`)) $(`repFilterMonth${tipo}`).value = '';
   if ($(`repMonthFrom${tipo}`)) $(`repMonthFrom${tipo}`).value = '';
   if ($(`repMonthTo${tipo}`)) $(`repMonthTo${tipo}`).value = '';
   if ($(`tableSearch${tipo}`)) $(`tableSearch${tipo}`).value = '';
@@ -1449,37 +1455,15 @@ function resetReportFilters(tipo) {
   updateMonthChipsActive(tipo, '');
 
   state.search = '';
-  state.filters = { company: '', tension: '', district: '', interval: '', sla: '', dateFrom: '', dateTo: '', month: '', monthFrom: '', monthTo: '' };
+  state.filters = { company: '', tension: '', district: '', interval: '', sla: '', dateFrom: '', dateTo: '', monthFrom: '', monthTo: '' };
   state.page = 1;
   updateReportView(tipo);
 }
 
-function handleMonthSelectChange(tipo) {
-  const monthVal = $(`repFilterMonth${tipo}`)?.value || '';
-  const monthFromEl = $(`repMonthFrom${tipo}`);
-  const monthToEl = $(`repMonthTo${tipo}`);
-  const dateFromEl = $(`repDateFrom${tipo}`);
-  const dateToEl = $(`repDateTo${tipo}`);
-
-  if (monthFromEl) monthFromEl.value = monthVal;
-  if (monthToEl) monthToEl.value = monthVal;
-  if (dateFromEl) dateFromEl.value = '';
-  if (dateToEl) dateToEl.value = '';
-
-  updateMonthChipsActive(tipo, '');
-  applyReportFilters(tipo);
-}
-
 function handleMonthRangeChange(tipo) {
-  const monthFrom = $(`repMonthFrom${tipo}`)?.value || '';
-  const monthTo = $(`repMonthTo${tipo}`)?.value || '';
-  const monthSelect = $(`repFilterMonth${tipo}`);
   const dateFromEl = $(`repDateFrom${tipo}`);
   const dateToEl = $(`repDateTo${tipo}`);
 
-  if (monthSelect) {
-    monthSelect.value = (monthFrom && monthTo && monthFrom === monthTo) ? monthFrom : '';
-  }
   if (dateFromEl) dateFromEl.value = '';
   if (dateToEl) dateToEl.value = '';
 
@@ -1488,10 +1472,8 @@ function handleMonthRangeChange(tipo) {
 }
 
 function handleExactDateChange(tipo) {
-  const monthSelect = $(`repFilterMonth${tipo}`);
   const monthFromEl = $(`repMonthFrom${tipo}`);
   const monthToEl = $(`repMonthTo${tipo}`);
-  if (monthSelect) monthSelect.value = '';
   if (monthFromEl) monthFromEl.value = '';
   if (monthToEl) monthToEl.value = '';
 
@@ -1500,7 +1482,6 @@ function handleExactDateChange(tipo) {
 }
 
 function applyMonthPreset(tipo, preset) {
-  const monthSelect = $(`repFilterMonth${tipo}`);
   const monthFromEl = $(`repMonthFrom${tipo}`);
   const monthToEl = $(`repMonthTo${tipo}`);
   const dateFromEl = $(`repDateFrom${tipo}`);
@@ -1520,23 +1501,19 @@ function applyMonthPreset(tipo, preset) {
   const latestMonth = availableMonths[availableMonths.length - 1];
 
   if (preset === 'current') {
-    if (monthSelect) monthSelect.value = latestMonth;
     if (monthFromEl) monthFromEl.value = latestMonth;
     if (monthToEl) monthToEl.value = latestMonth;
   } else if (preset === 'previous') {
     const prevMonth = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 2] : latestMonth;
-    if (monthSelect) monthSelect.value = prevMonth;
     if (monthFromEl) monthFromEl.value = prevMonth;
     if (monthToEl) monthToEl.value = prevMonth;
   } else if (preset === 'last3') {
     const startIdx = Math.max(0, availableMonths.length - 3);
     const mFrom = availableMonths[startIdx];
     const mTo = latestMonth;
-    if (monthSelect) monthSelect.value = (mFrom === mTo) ? mFrom : '';
     if (monthFromEl) monthFromEl.value = mFrom;
     if (monthToEl) monthToEl.value = mTo;
   } else if (preset === 'all') {
-    if (monthSelect) monthSelect.value = '';
     if (monthFromEl) monthFromEl.value = '';
     if (monthToEl) monthToEl.value = '';
   }
@@ -2036,7 +2013,6 @@ Object.assign(window, {
   downloadObrasTable,
   handleExactDateChange,
   handleMonthRangeChange,
-  handleMonthSelectChange,
   handleObrasSort,
   handleTableSort,
   resetObrasFilters,

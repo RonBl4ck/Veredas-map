@@ -630,22 +630,19 @@
           <button type="button" class="link-btn-reset" onclick="resetReportFilters('Ejecutado')">Restablecer</button>
         </div>
 
-        <!-- Filtro por Mes / Rango de Meses -->
+        <!-- Filtro Rango de Meses (Opción 2: Selects limpios + Accesos Rápidos) -->
         <div class="filter-group">
-          <label for="repFilterMonthEjecutado">Filtrar por Mes</label>
-          <select id="repFilterMonthEjecutado" onchange="handleMonthSelectChange('Ejecutado')">
-            <option value="">Todos los meses</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label>Rango de Meses</label>
+          <label>Filtrar por Mes / Período</label>
           <div class="date-range-grid">
             <label class="sub-label">Desde
-              <input id="repMonthFromEjecutado" type="month" onchange="handleMonthRangeChange('Ejecutado')">
+              <select id="repMonthFromEjecutado" onchange="handleMonthRangeChange('Ejecutado')">
+                <option value="">Inicio</option>
+              </select>
             </label>
             <label class="sub-label">Hasta
-              <input id="repMonthToEjecutado" type="month" onchange="handleMonthRangeChange('Ejecutado')">
+              <select id="repMonthToEjecutado" onchange="handleMonthRangeChange('Ejecutado')">
+                <option value="">Fin</option>
+              </select>
             </label>
           </div>
           <div class="month-preset-chips">
