@@ -2,6 +2,7 @@ import { initAuth as initAuthModule } from './js/auth.js';
 import { bindDashboardActions } from './js/dashboard-actions.js';
 import { byId } from './js/dom.js';
 import { filterMapRows } from './js/map-filters.js';
+import { calculateContractorAvgDays } from './js/report-metrics.js';
 import { lookupSupply, SupplyLookupError } from './js/supply-search.js';
 
 /**
@@ -59,7 +60,7 @@ const reportState = {
     pageSize: 25,
     search: '',
     sort: { column: 'idx', direction: 'asc' },
-    filters: { company: '', tension: '', district: '', interval: '', dateFrom: '', dateTo: '' }
+    filters: { company: '', tension: '', district: '', interval: '', dateFrom: '', dateTo: '', month: '', monthFrom: '', monthTo: '' }
   }
 };
 
@@ -1060,13 +1061,14 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
+        tooltip: options.tooltipCallbacks ? { callbacks: options.tooltipCallbacks } : {},
         datalabels: {
           display: options.showDataLabels ?? (type !== 'line' || labels.length <= 14),
-          color: type === 'bar' ? (isHorizontalBar ? '#0F2338' : '#ffffff') : '#0F2338',
+          color: options.dataLabelColor || (type === 'bar' ? (isHorizontalBar ? '#0F2338' : '#ffffff') : '#0F2338'),
           font: { weight: '800', size: 10, family: "'Plus Jakarta Sans', sans-serif" },
-          anchor: isHorizontalBar ? 'end' : (type === 'line' ? 'end' : 'center'),
-          align: isHorizontalBar ? 'right' : (type === 'line' ? 'top' : 'center'),
-          formatter: (v) => (v > 0 ? v.toLocaleString('es-PE') : '')
+          anchor: options.dataLabelAnchor || (isHorizontalBar ? 'end' : (type === 'line' ? 'end' : 'center')),
+          align: options.dataLabelAlign || (isHorizontalBar ? 'right' : (type === 'line' ? 'top' : 'center')),
+          formatter: options.dataLabelFormatter || ((v) => (v > 0 ? v.toLocaleString('es-PE') : ''))
         }
       },
       scales: isHorizontalBar ? {
@@ -1074,7 +1076,7 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
         y: { grid: { display: false }, ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 10, weight: '700' } } }
       } : type === 'bar' ? {
         x: { grid: { display: false }, ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 10, weight: '700' } } },
-        y: { beginAtZero: true, grid: { color: '#E2E8F0', drawBorder: false }, ticks: { precision: 0, font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 } } }
+        y: { beginAtZero: true, grace: options.yGrace || 0, grid: { color: '#E2E8F0', drawBorder: false }, ticks: { precision: 0, font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 } } }
       } : type === 'line' ? {
         x: { ticks: { autoSkip: true, maxTicksLimit: 16, font: { family: "'Plus Jakarta Sans', sans-serif", size: 9 } }, grid: { display: false } },
         y: { beginAtZero: true, grid: { color: '#E2E8F0', drawBorder: false }, ticks: { precision: 0, font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 } } }
@@ -1099,12 +1101,35 @@ function populateReportFilters(tipo) {
   fill(`repFilterCompany${tipo}`, companies);
   fill(`repFilterTension${tipo}`, voltages);
   fill(`repFilterDistrict${tipo}`, districts);
+
+  if (tipo === 'Ejecutado') {
+    const monthSelect = $(`repFilterMonth${tipo}`);
+    if (monthSelect) {
+      const months = [...new Set(
+        rows.map(r => r.fecha_fin_date ? r.fecha_fin_date.slice(0, 7) : '').filter(Boolean)
+      )].sort().reverse();
+
+      const monthNames = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+      ];
+
+      const formatMonth = (ym) => {
+        const [y, m] = ym.split('-');
+        const idx = parseInt(m, 10) - 1;
+        return `${monthNames[idx] || m} ${y}`;
+      };
+
+      monthSelect.innerHTML = '<option value="">Todos los meses</option>' +
+        months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+    }
+  }
 }
 
 function getFilteredReportRows(tipo) {
   const state = reportState[tipo];
   const q = state.search.toLowerCase();
-  const { company, tension, district, interval, sla, dateFrom, dateTo } = state.filters;
+  const { company, tension, district, interval, sla, dateFrom, dateTo, month, monthFrom, monthTo } = state.filters;
 
   return allRows.filter(r => {
     if (r.tipo !== tipo) return false;
@@ -1117,11 +1142,20 @@ function getFilteredReportRows(tipo) {
       if (slaInfo.status !== sla) return false;
     }
 
-    // Filtro de Rango de Fechas (Desde - Hasta)
+    // Filtro de Rango de Fechas / Meses
     const targetDate = tipo === 'Ejecutado' ? r.fecha_fin_date : r.fecha_inicio_date;
-    if (tipo === 'Ejecutado' && (dateFrom || dateTo) && !targetDate) return false;
+    const hasAnyDateFilter = Boolean(dateFrom || dateTo || month || monthFrom || monthTo);
+    if (tipo === 'Ejecutado' && hasAnyDateFilter && !targetDate) return false;
+
+    // Rango de fechas por día
     if (dateFrom && targetDate && targetDate < dateFrom) return false;
     if (dateTo && targetDate && targetDate > dateTo) return false;
+
+    // Filtro por Mes o Rango de Meses
+    const targetMonth = targetDate ? targetDate.slice(0, 7) : '';
+    if (month && (!targetMonth || targetMonth !== month)) return false;
+    if (monthFrom && (!targetMonth || targetMonth < monthFrom)) return false;
+    if (monthTo && (!targetMonth || targetMonth > monthTo)) return false;
 
     // Búsqueda en tabla
     if (q) {
@@ -1208,7 +1242,12 @@ function updateReportView(tipo) {
   }
 
   // Contador de filtros activos
-  const activeCount = Object.values(state.filters).filter(Boolean).length + (state.search ? 1 : 0);
+  const filterKeys = ['company', 'tension', 'district', 'interval', 'sla', 'dateFrom', 'dateTo'];
+  let activeCount = filterKeys.filter(k => Boolean(state.filters[k])).length;
+  if (state.filters.month || state.filters.monthFrom || state.filters.monthTo) {
+    activeCount += 1;
+  }
+  if (state.search) activeCount += 1;
   $(`activeFilterCount${tipo}`).textContent = activeCount > 0 ? `${activeCount} filtro(s) activo(s)` : 'Sin filtros';
 
   // 2. Gráficos
@@ -1221,6 +1260,32 @@ function updateReportView(tipo) {
   // Contratistas
   const compCounts = Object.entries(countBy('contratista')).sort((a, b) => b[1] - a[1]);
   renderChartInstance(`chartCompany${tipo}`, 'bar', compCounts.map(x => x[0]), compCounts.map(x => x[1]));
+
+  // Promedio de días de cierre por contratista (Solo para Ejecutados)
+  if (tipo === 'Ejecutado') {
+    const avgDaysEntries = calculateContractorAvgDays(filtered);
+
+    renderChartInstance(
+      'chartAvgDaysCompanyEjecutado',
+      'bar',
+      avgDaysEntries.map(e => e.company),
+      avgDaysEntries.map(e => e.avgDays),
+      {
+        backgroundColor: avgDaysEntries.map(e => getCompanyColor(e.company)),
+        dataLabelFormatter: (v) => `${v} d`,
+        dataLabelAnchor: 'end',
+        dataLabelAlign: 'top',
+        dataLabelColor: '#0F2338',
+        yGrace: '15%',
+        tooltipCallbacks: {
+          label: (ctx) => {
+            const entry = avgDaysEntries[ctx.dataIndex];
+            return ` Promedio: ${entry.avgDays} días (${entry.count.toLocaleString('es-PE')} órdenes)`;
+          }
+        }
+      }
+    );
+  }
 
   // Tensión
   const voltCounts = Object.entries(countBy('tension')).sort((a, b) => b[1] - a[1]);
@@ -1349,35 +1414,141 @@ function changeReportPage(tipo, delta) {
 
 function applyReportFilters(tipo) {
   const state = reportState[tipo];
-  state.filters.company = $(`repFilterCompany${tipo}`).value;
-  state.filters.tension = $(`repFilterTension${tipo}`).value;
-  state.filters.district = $(`repFilterDistrict${tipo}`).value;
-  state.filters.interval = $(`repFilterInterval${tipo}`).value;
-  state.filters.sla = tipo === 'Pendiente' ? $(`repFilterSlaPendiente`).value : '';
-  state.filters.dateFrom = $(`repDateFrom${tipo}`).value;
-  state.filters.dateTo = $(`repDateTo${tipo}`).value;
+  state.filters.company = $(`repFilterCompany${tipo}`)?.value || '';
+  state.filters.tension = $(`repFilterTension${tipo}`)?.value || '';
+  state.filters.district = $(`repFilterDistrict${tipo}`)?.value || '';
+  state.filters.interval = $(`repFilterInterval${tipo}`)?.value || '';
+  state.filters.sla = tipo === 'Pendiente' ? ($(`repFilterSlaPendiente`)?.value || '') : '';
+  state.filters.dateFrom = $(`repDateFrom${tipo}`)?.value || '';
+  state.filters.dateTo = $(`repDateTo${tipo}`)?.value || '';
+  state.filters.month = $(`repFilterMonth${tipo}`)?.value || '';
+  state.filters.monthFrom = $(`repMonthFrom${tipo}`)?.value || '';
+  state.filters.monthTo = $(`repMonthTo${tipo}`)?.value || '';
   state.page = 1;
   updateReportView(tipo);
 }
 
 function resetReportFilters(tipo) {
   const state = reportState[tipo];
-  $(`repFilterCompany${tipo}`).value = '';
-  $(`repFilterTension${tipo}`).value = '';
-  $(`repFilterDistrict${tipo}`).value = '';
-  $(`repFilterInterval${tipo}`).value = '';
+  if ($(`repFilterCompany${tipo}`)) $(`repFilterCompany${tipo}`).value = '';
+  if ($(`repFilterTension${tipo}`)) $(`repFilterTension${tipo}`).value = '';
+  if ($(`repFilterDistrict${tipo}`)) $(`repFilterDistrict${tipo}`).value = '';
+  if ($(`repFilterInterval${tipo}`)) $(`repFilterInterval${tipo}`).value = '';
   if (tipo === 'Pendiente') {
     const filterSla = $(`repFilterSlaPendiente`);
     if (filterSla) filterSla.value = '';
     $('cardDueSoonPendiente')?.classList.remove('active-filter');
   }
-  $(`repDateFrom${tipo}`).value = '';
-  $(`repDateTo${tipo}`).value = '';
-  $(`tableSearch${tipo}`).value = '';
+  if ($(`repDateFrom${tipo}`)) $(`repDateFrom${tipo}`).value = '';
+  if ($(`repDateTo${tipo}`)) $(`repDateTo${tipo}`).value = '';
+  if ($(`repFilterMonth${tipo}`)) $(`repFilterMonth${tipo}`).value = '';
+  if ($(`repMonthFrom${tipo}`)) $(`repMonthFrom${tipo}`).value = '';
+  if ($(`repMonthTo${tipo}`)) $(`repMonthTo${tipo}`).value = '';
+  if ($(`tableSearch${tipo}`)) $(`tableSearch${tipo}`).value = '';
+
+  updateMonthChipsActive(tipo, '');
+
   state.search = '';
-  state.filters = { company: '', tension: '', district: '', interval: '', sla: '', dateFrom: '', dateTo: '' };
+  state.filters = { company: '', tension: '', district: '', interval: '', sla: '', dateFrom: '', dateTo: '', month: '', monthFrom: '', monthTo: '' };
   state.page = 1;
   updateReportView(tipo);
+}
+
+function handleMonthSelectChange(tipo) {
+  const monthVal = $(`repFilterMonth${tipo}`)?.value || '';
+  const monthFromEl = $(`repMonthFrom${tipo}`);
+  const monthToEl = $(`repMonthTo${tipo}`);
+  const dateFromEl = $(`repDateFrom${tipo}`);
+  const dateToEl = $(`repDateTo${tipo}`);
+
+  if (monthFromEl) monthFromEl.value = monthVal;
+  if (monthToEl) monthToEl.value = monthVal;
+  if (dateFromEl) dateFromEl.value = '';
+  if (dateToEl) dateToEl.value = '';
+
+  updateMonthChipsActive(tipo, '');
+  applyReportFilters(tipo);
+}
+
+function handleMonthRangeChange(tipo) {
+  const monthFrom = $(`repMonthFrom${tipo}`)?.value || '';
+  const monthTo = $(`repMonthTo${tipo}`)?.value || '';
+  const monthSelect = $(`repFilterMonth${tipo}`);
+  const dateFromEl = $(`repDateFrom${tipo}`);
+  const dateToEl = $(`repDateTo${tipo}`);
+
+  if (monthSelect) {
+    monthSelect.value = (monthFrom && monthTo && monthFrom === monthTo) ? monthFrom : '';
+  }
+  if (dateFromEl) dateFromEl.value = '';
+  if (dateToEl) dateToEl.value = '';
+
+  updateMonthChipsActive(tipo, '');
+  applyReportFilters(tipo);
+}
+
+function handleExactDateChange(tipo) {
+  const monthSelect = $(`repFilterMonth${tipo}`);
+  const monthFromEl = $(`repMonthFrom${tipo}`);
+  const monthToEl = $(`repMonthTo${tipo}`);
+  if (monthSelect) monthSelect.value = '';
+  if (monthFromEl) monthFromEl.value = '';
+  if (monthToEl) monthToEl.value = '';
+
+  updateMonthChipsActive(tipo, '');
+  applyReportFilters(tipo);
+}
+
+function applyMonthPreset(tipo, preset) {
+  const monthSelect = $(`repFilterMonth${tipo}`);
+  const monthFromEl = $(`repMonthFrom${tipo}`);
+  const monthToEl = $(`repMonthTo${tipo}`);
+  const dateFromEl = $(`repDateFrom${tipo}`);
+  const dateToEl = $(`repDateTo${tipo}`);
+
+  if (dateFromEl) dateFromEl.value = '';
+  if (dateToEl) dateToEl.value = '';
+
+  const rows = allRows.filter(r => r.tipo === tipo);
+  const targetDateKey = tipo === 'Ejecutado' ? 'fecha_fin_date' : 'fecha_inicio_date';
+  const availableMonths = [...new Set(
+    rows.map(r => r[targetDateKey] ? r[targetDateKey].slice(0, 7) : '').filter(Boolean)
+  )].sort();
+
+  if (availableMonths.length === 0) return;
+
+  const latestMonth = availableMonths[availableMonths.length - 1];
+
+  if (preset === 'current') {
+    if (monthSelect) monthSelect.value = latestMonth;
+    if (monthFromEl) monthFromEl.value = latestMonth;
+    if (monthToEl) monthToEl.value = latestMonth;
+  } else if (preset === 'previous') {
+    const prevMonth = availableMonths.length >= 2 ? availableMonths[availableMonths.length - 2] : latestMonth;
+    if (monthSelect) monthSelect.value = prevMonth;
+    if (monthFromEl) monthFromEl.value = prevMonth;
+    if (monthToEl) monthToEl.value = prevMonth;
+  } else if (preset === 'last3') {
+    const startIdx = Math.max(0, availableMonths.length - 3);
+    const mFrom = availableMonths[startIdx];
+    const mTo = latestMonth;
+    if (monthSelect) monthSelect.value = (mFrom === mTo) ? mFrom : '';
+    if (monthFromEl) monthFromEl.value = mFrom;
+    if (monthToEl) monthToEl.value = mTo;
+  } else if (preset === 'all') {
+    if (monthSelect) monthSelect.value = '';
+    if (monthFromEl) monthFromEl.value = '';
+    if (monthToEl) monthToEl.value = '';
+  }
+
+  updateMonthChipsActive(tipo, preset);
+  applyReportFilters(tipo);
+}
+
+function updateMonthChipsActive(tipo, activePreset) {
+  document.querySelectorAll(`.month-chip-${tipo}`).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === activePreset);
+  });
 }
 
 function downloadCurrentTable(tipo) {
@@ -1856,12 +2027,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // Compatibilidad temporal: los controles que aún están en el HTML siguen
 // funcionando mientras se migran por grupos a listeners externos.
 Object.assign(window, {
+  applyMonthPreset,
   applyObrasFilters,
   applyReportFilters,
   changeObrasPage,
   changeReportPage,
   downloadCurrentTable,
   downloadObrasTable,
+  handleExactDateChange,
+  handleMonthRangeChange,
+  handleMonthSelectChange,
   handleObrasSort,
   handleTableSort,
   resetObrasFilters,

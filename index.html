@@ -520,6 +520,17 @@
             <div class="chart-container"><canvas id="chartCompanyEjecutado"></canvas></div>
           </div>
 
+          <div class="chart-card chart-avg-days">
+            <div class="chart-title">
+              <div>
+                <b>Promedio de Cierre por Contratista</b>
+                <span>Días transcurridos hasta el cierre</span>
+              </div>
+              <span class="chart-badge">Días Promedio</span>
+            </div>
+            <div class="chart-container"><canvas id="chartAvgDaysCompanyEjecutado"></canvas></div>
+          </div>
+
           <div class="chart-card chart-voltage">
             <div class="chart-title">
               <div>
@@ -529,6 +540,17 @@
               <span class="chart-badge">Tensión</span>
             </div>
             <div class="chart-container"><canvas id="chartVoltageEjecutado"></canvas></div>
+          </div>
+
+          <div class="chart-card chart-interval">
+            <div class="chart-title">
+              <div>
+                <b>Tiempo de Atención</b>
+                <span>Duración hasta el cierre de vereda</span>
+              </div>
+              <span class="chart-badge">Intervalos</span>
+            </div>
+            <div class="chart-container"><canvas id="chartIntervalEjecutado"></canvas></div>
           </div>
 
           <div class="chart-card chart-day wide-chart">
@@ -542,26 +564,15 @@
             <div class="chart-container"><canvas id="chartDayEjecutado"></canvas></div>
           </div>
 
-          <div class="chart-card chart-district">
+          <div class="chart-card chart-district wide-chart">
             <div class="chart-title">
               <div>
                 <b>Distritos Atendidos</b>
                 <span>Distribución territorial de cierres</span>
               </div>
-              <span class="chart-badge">Distritos</span>
+              <span class="chart-badge">Top distritos</span>
             </div>
             <div class="chart-container"><canvas id="chartDistrictEjecutado"></canvas></div>
-          </div>
-
-          <div class="chart-card chart-interval">
-            <div class="chart-title">
-              <div>
-                <b>Tiempo de Atención</b>
-                <span>Duración hasta el cierre de vereda</span>
-              </div>
-              <span class="chart-badge">Intervalos</span>
-            </div>
-            <div class="chart-container"><canvas id="chartIntervalEjecutado"></canvas></div>
           </div>
         </div>
 
@@ -619,15 +630,41 @@
           <button type="button" class="link-btn-reset" onclick="resetReportFilters('Ejecutado')">Restablecer</button>
         </div>
 
-        <!-- Filtro Rango de Fechas -->
+        <!-- Filtro por Mes / Rango de Meses -->
         <div class="filter-group">
-          <label>Rango de Fechas (Cierre / Fin)</label>
+          <label for="repFilterMonthEjecutado">Filtrar por Mes</label>
+          <select id="repFilterMonthEjecutado" onchange="handleMonthSelectChange('Ejecutado')">
+            <option value="">Todos los meses</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>Rango de Meses</label>
           <div class="date-range-grid">
             <label class="sub-label">Desde
-              <input id="repDateFromEjecutado" type="date" onchange="applyReportFilters('Ejecutado')">
+              <input id="repMonthFromEjecutado" type="month" onchange="handleMonthRangeChange('Ejecutado')">
             </label>
             <label class="sub-label">Hasta
-              <input id="repDateToEjecutado" type="date" onchange="applyReportFilters('Ejecutado')">
+              <input id="repMonthToEjecutado" type="month" onchange="handleMonthRangeChange('Ejecutado')">
+            </label>
+          </div>
+          <div class="month-preset-chips">
+            <button type="button" class="btn-chip-filter month-chip-Ejecutado" data-preset="current" onclick="applyMonthPreset('Ejecutado', 'current')">Mes actual</button>
+            <button type="button" class="btn-chip-filter month-chip-Ejecutado" data-preset="previous" onclick="applyMonthPreset('Ejecutado', 'previous')">Mes anterior</button>
+            <button type="button" class="btn-chip-filter month-chip-Ejecutado" data-preset="last3" onclick="applyMonthPreset('Ejecutado', 'last3')">Últimos 3m</button>
+            <button type="button" class="btn-chip-filter month-chip-Ejecutado" data-preset="all" onclick="applyMonthPreset('Ejecutado', 'all')">Todos</button>
+          </div>
+        </div>
+
+        <!-- Filtro Rango de Fechas (Días específicos) -->
+        <div class="filter-group">
+          <label>Rango de Fechas por Día (Cierre / Fin)</label>
+          <div class="date-range-grid">
+            <label class="sub-label">Desde
+              <input id="repDateFromEjecutado" type="date" onchange="handleExactDateChange('Ejecutado')">
+            </label>
+            <label class="sub-label">Hasta
+              <input id="repDateToEjecutado" type="date" onchange="handleExactDateChange('Ejecutado')">
             </label>
           </div>
         </div>
