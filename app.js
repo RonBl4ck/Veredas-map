@@ -53,7 +53,7 @@ const reportState = {
     pageSize: 25,
     search: '',
     sort: { column: 'idx', direction: 'asc' },
-    filters: { company: '', tension: '', district: '', interval: '', sla: '', dateFrom: '', dateTo: '' }
+    filters: { company: '', tension: '', district: '', interval: '', sla: '', subtipo: '', dateFrom: '', dateTo: '' }
   },
   Ejecutado: {
     page: 1,
@@ -258,10 +258,21 @@ function mapCsvRowToRecord(r, originalIndex) {
   const estadoOriginal = clean(r.ESTADO_SAP || r.estado_original);
   const tipoOriginal = clean(r.TIPO || r.tipo).toUpperCase();
   const estadoNormalizado = estadoOriginal.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const tipo = tipoOriginal === 'EJECUTADO' || tipoOriginal === 'ATENDIDO' || Boolean(fechaFin) ||
-    ['ATENDID', 'EJECUTAD', 'CONCLUID', 'FINALIZAD', 'TERMINAD', 'CERRAD', 'RESUELT'].some(estado => estadoNormalizado.includes(estado))
-      ? 'Ejecutado'
-      : 'Pendiente';
+
+  let tipo;
+  const isOrm = tipoOriginal === 'PENDIENTES ORM' ||
+                tipoOriginal === 'PENDIENTE ORM' ||
+                clean(r.TIPO || r.tipo) === 'PENDIENTES ORM' ||
+                clean(r.SUBTIPO || r.subtipo).toUpperCase().includes('ORM');
+
+  if (isOrm) {
+    tipo = 'PENDIENTES ORM';
+  } else if (tipoOriginal === 'EJECUTADO' || tipoOriginal === 'ATENDIDO' || Boolean(fechaFin) ||
+    ['ATENDID', 'EJECUTAD', 'CONCLUID', 'FINALIZAD', 'TERMINAD', 'CERRAD', 'RESUELT'].some(estado => estadoNormalizado.includes(estado))) {
+    tipo = 'Ejecutado';
+  } else {
+    tipo = 'Pendiente';
+  }
   const intervaloOriginal = clean(r.INTERVALO || r.intervalo);
   const intervaloNormalizado = normalizeIntervalString(intervaloOriginal, fechaInicio, fechaFin, tipo);
 
@@ -282,6 +293,8 @@ function mapCsvRowToRecord(r, originalIndex) {
     orden: clean(r.ORDEN || r.orden),
     orden_sistema_origen: clean(r.ORDEN_ORIGEN || r.ORDEN_SISTEMA_ORIGEN || r.orden_sistema_origen),
     tipo,
+    TIPO: tipo,
+    is_orm: isOrm,
     estado_original: estadoOriginal,
     contratista: normalizeContractor(r.CONTRATISTA || r.contratista) || 'Sin contratista',
     tension: clean(r.TENSION || r.tension) || 'Sin nivel',
@@ -527,14 +540,46 @@ function iconSvg(tension, color) {
   return `<svg viewBox="0 0 42 34" aria-label="Camión"><path d="M2 7h25v17H2zM27 13h8l5 6v5H27z" fill="${color}" stroke="#17384D" stroke-width="1.4"/><circle cx="11" cy="28" r="3.5" fill="#17384D"/><circle cx="33" cy="28" r="3.5" fill="#17384D"/><path d="M30 15h4l3 4h-7z" fill="#EAF7FD"/></svg>`;
 }
 
-function wrapMarkerWithHalo(innerSvg, slaStatus) {
-  const ringClass = slaStatus ? `sla-ring-${slaStatus}` : 'sla-ring-en_plazo';
+function ormIconSvg(color = '#7C3AED') {
+  return `<svg viewBox="0 0 36 34" class="orm-marker-svg" aria-label="Pendiente ORM">
+    <rect x="3" y="3" width="30" height="28" rx="8" fill="${color}" stroke="#4C1D95" stroke-width="1.6"/>
+    <path d="M12 17h12M18 11v12" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="18" cy="17" r="8.5" fill="none" stroke="#DDD6FE" stroke-width="1.5" stroke-dasharray="2 2"/>
+    <circle cx="18" cy="17" r="3" fill="#FFFFFF"/>
+  </svg>`;
+}
+
+function wrapMarkerWithHalo(innerSvg, slaStatus, isOrm = false) {
+  const ringClass = isOrm ? 'sla-ring-orm' : (slaStatus ? `sla-ring-${slaStatus}` : 'sla-ring-en_plazo');
+  const ormClass = isOrm ? 'marker-orm' : '';
   return `
-    <div class="works-marker-wrapper ${ringClass}">
+    <div class="works-marker-wrapper ${ringClass} ${ormClass}">
       <div class="works-halo-ring"></div>
       ${innerSvg}
     </div>
   `;
+}
+
+export function calculateStateCounts(rows) {
+  const list = rows || [];
+  const pendientesNormales = list.filter(r => (r.tipo === 'Pendiente' || r.TIPO === 'Pendiente') && r.tipo !== 'PENDIENTES ORM' && !r.is_orm).length;
+  const pendientesOrm = list.filter(r => r.tipo === 'PENDIENTES ORM' || r.TIPO === 'PENDIENTES ORM' || r.is_orm).length;
+  const ejecutados = list.filter(r => r.tipo === 'Ejecutado' || r.TIPO === 'Ejecutado').length;
+  return {
+    total: list.length,
+    pendientesNormales,
+    pendientesOrm,
+    ejecutados
+  };
+}
+
+export function updateStateKpis() {
+  const counts = calculateStateCounts(mapRows);
+  if ($('mapKpiTotal')) $('mapKpiTotal').textContent = counts.total.toLocaleString('es-PE');
+  if ($('mapKpiPendientes')) $('mapKpiPendientes').textContent = counts.pendientesNormales.toLocaleString('es-PE');
+  if ($('mapKpiOrm')) $('mapKpiOrm').textContent = counts.pendientesOrm.toLocaleString('es-PE');
+  if ($('mapKpiEjecutados')) $('mapKpiEjecutados').textContent = counts.ejecutados.toLocaleString('es-PE');
+  if ($('kpiOrmPendiente')) $('kpiOrmPendiente').textContent = counts.pendientesOrm.toLocaleString('es-PE');
 }
 
 function getCoordOriginBadgeHtml(origen) {
@@ -672,12 +717,29 @@ function initMap() {
     clearTimeout(mapSearchTimer);
     mapSearchTimer = setTimeout(renderMap, 300);
   });
-  $('mapFilterTipo').addEventListener('change', renderMap);
+  $('mapFilterTipo').addEventListener('change', () => {
+    const val = $('mapFilterTipo').value;
+    document.querySelectorAll('.map-kpi-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.tipo === val);
+    });
+    renderMap();
+  });
   $('mapFilterContratista').addEventListener('change', renderMap);
   $('mapFilterTension').addEventListener('change', renderMap);
   $('mapFilterDistrito').addEventListener('change', renderMap);
   $('mapDateFrom').addEventListener('change', renderMap);
   $('mapDateTo').addEventListener('change', renderMap);
+
+  // Selector de estados por pestañas / pills en panel superior del mapa
+  document.querySelectorAll('.map-kpi-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const selectedTipo = pill.dataset.tipo || '';
+      $('mapFilterTipo').value = selectedTipo;
+      document.querySelectorAll('.map-kpi-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      renderMap();
+    });
+  });
 
   $('btnResetMapFilters').addEventListener('click', () => {
     $('mapSearchInput').value = '';
@@ -687,6 +749,9 @@ function initMap() {
     $('mapFilterDistrito').value = '';
     $('mapDateFrom').value = '';
     $('mapDateTo').value = '';
+    document.querySelectorAll('.map-kpi-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.tipo === '');
+    });
     renderMap();
   });
 
@@ -772,11 +837,12 @@ function renderMap() {
     if (!isPeruCoordinate(r)) return;
 
     const isObra = Boolean(r.es_obra);
+    const isOrm = r.tipo === 'PENDIENTES ORM' || Boolean(r.is_orm);
     let slaStatus = 'en_plazo';
 
     if (isObra) {
       slaStatus = r.sla?.status || 'en_plazo';
-    } else if (r.tipo === 'Pendiente') {
+    } else if (r.tipo === 'Pendiente' || isOrm) {
       const slaInfo = getSlaInfo(r);
       if (slaInfo.status === 'vencida') {
         slaStatus = 'vencida';
@@ -789,18 +855,20 @@ function renderMap() {
       slaStatus = 'en_plazo';
     }
 
-    const companyColor = getCompanyColor(r.contratista);
+    const companyColor = isOrm ? '#7C3AED' : getCompanyColor(r.contratista);
     const innerSvg = isObra
       ? `<svg viewBox="0 0 40 34" class="works-helmet-svg" aria-label="Obras">
           <path d="M8 18c0-7 5.4-12 12-12s12 5 12 12v2H8z" fill="${companyColor}" stroke="#17384D" stroke-width="1.6"/>
           <path d="M5 21h30v5H5z" fill="${companyColor}" stroke="#17384D" stroke-width="1.6"/>
           <path d="M20 6v15M11 17h18" stroke="#17384D" stroke-width="1.4"/>
         </svg>`
-      : iconSvg(r.tension, companyColor);
+      : isOrm
+        ? ormIconSvg('#7C3AED')
+        : iconSvg(r.tension, companyColor);
 
     const icon = L.divIcon({
-      className: 'custom-map-icon',
-      html: wrapMarkerWithHalo(innerSvg, slaStatus),
+      className: isOrm ? 'custom-map-icon marker-orm' : 'custom-map-icon',
+      html: wrapMarkerWithHalo(innerSvg, slaStatus, isOrm),
       iconSize: [36, 32],
       iconAnchor: [18, 25]
     });
@@ -854,7 +922,7 @@ function renderMap() {
     }
 
     const regularSla = getSlaInfo(r);
-    const regularSlaBadge = r.tipo === 'Pendiente' ? `
+    const regularSlaBadge = (r.tipo === 'Pendiente' || isOrm) ? `
       <div style="margin-bottom:6px">
         <span class="deadline-badge deadline-${regularSla.status}">
           ${escapeHtml(regularSla.label)}
@@ -862,12 +930,18 @@ function renderMap() {
       </div>
     ` : '';
     const coordBadge = getCoordOriginBadgeHtml(r.origen_coordenada);
+    const ormBadge = isOrm ? `
+      <div style="margin-bottom:6px">
+        <span class="badge-orm">⚙️ PENDIENTE ORM</span>
+      </div>
+    ` : '';
 
     const popupHtml = `
       <div style="min-width:260px;font-size:12px;line-height:1.4">
-        <div style="font-weight:900;color:var(--navy);font-size:14px;margin-bottom:6px">
-          ${escapeHtml(r.tipo)}: Orden ${escapeHtml(r.orden)}
+        <div style="font-weight:900;color:${isOrm ? '#6D28D9' : 'var(--navy)'};font-size:14px;margin-bottom:6px">
+          ${isOrm ? 'Pendiente ORM' : escapeHtml(r.tipo)}: Orden ${escapeHtml(r.orden)}
         </div>
+        ${ormBadge}
         ${regularSlaBadge}
         ${coordBadge}
         <div><b>Orden Origen:</b> ${escapeHtml(r.orden_sistema_origen || '-')}</div>
@@ -886,6 +960,8 @@ function renderMap() {
     markerLayer.addLayer(m);
     bounds.push([drawLat, drawLon]);
   });
+
+  updateStateKpis();
 
   const invalidGeoCount = visible.filter(record => !isPeruCoordinate(record)).length;
   $('mapStatusChip').textContent = `${bounds.length.toLocaleString('es-PE')} en mapa${invalidGeoCount ? ` · ${invalidGeoCount} sin ubicación válida` : ''}`;
@@ -1086,7 +1162,7 @@ function renderChartInstance(canvasId, type, labels, data, options = {}) {
 }
 
 function populateReportFilters(tipo) {
-  const rows = allRows.filter(r => r.tipo === tipo);
+  const rows = allRows.filter(r => r.tipo === tipo || (tipo === 'Pendiente' && (r.tipo === 'PENDIENTES ORM' || r.is_orm)));
   const companies = [...new Set(rows.map(r => clean(r.contratista)).filter(Boolean))].sort();
   const voltages = [...new Set(rows.map(r => clean(r.tension)).filter(Boolean))].sort();
   const districts = [...new Set(rows.map(r => clean(r.distrito)).filter(Boolean))].sort();
@@ -1137,10 +1213,17 @@ function populateReportFilters(tipo) {
 function getFilteredReportRows(tipo) {
   const state = reportState[tipo];
   const q = state.search.toLowerCase();
-  const { company, tension, district, interval, sla, dateFrom, dateTo, month, monthFrom, monthTo } = state.filters;
+  const { company, tension, district, interval, sla, subtipo, dateFrom, dateTo, month, monthFrom, monthTo } = state.filters;
 
   return allRows.filter(r => {
-    if (r.tipo !== tipo) return false;
+    const isOrm = r.tipo === 'PENDIENTES ORM' || Boolean(r.is_orm);
+    if (tipo === 'Pendiente') {
+      if (r.tipo !== 'Pendiente' && !isOrm) return false;
+      if (subtipo === 'NORMAL' && isOrm) return false;
+      if (subtipo === 'PENDIENTES ORM' && !isOrm) return false;
+    } else {
+      if (r.tipo !== tipo) return false;
+    }
     if (company && clean(r.contratista) !== company) return false;
     if (tension && clean(r.tension) !== tension) return false;
     if (district && clean(r.distrito) !== district) return false;
@@ -1167,7 +1250,7 @@ function getFilteredReportRows(tipo) {
 
     // Búsqueda en tabla
     if (q) {
-      const match = [r.orden, r.orden_sistema_origen, r.sed, r.distrito, r.contratista, r.ubicacion_tecnica]
+      const match = [r.orden, r.orden_sistema_origen, r.sed, r.distrito, r.contratista, r.ubicacion_tecnica, r.tipo, r.TIPO, isOrm ? 'orm' : '']
         .some(v => clean(v).toLowerCase().includes(q));
       if (!match) return false;
     }
@@ -1247,10 +1330,22 @@ function updateReportView(tipo) {
         ? 'Filtro activo: clic para quitar filtro de órdenes que vencen en 24h'
         : 'Clic para filtrar órdenes que vencen en las próximas 24 horas';
     }
+
+    const kpiOrmEl = $('kpiOrmPendiente');
+    const ormCount = filtered.filter(r => r.tipo === 'PENDIENTES ORM' || r.is_orm).length;
+    if (kpiOrmEl) kpiOrmEl.textContent = ormCount.toLocaleString('es-PE');
+    const isOrmActive = state.filters.subtipo === 'PENDIENTES ORM';
+    const cardOrm = $('cardOrmPendiente');
+    if (cardOrm) {
+      cardOrm.classList.toggle('active-filter', isOrmActive);
+      cardOrm.title = isOrmActive
+        ? 'Filtro activo: clic para quitar filtro de órdenes ORM'
+        : 'Clic para filtrar solo órdenes Pendientes ORM';
+    }
   }
 
   // Contador de filtros activos
-  const filterKeys = ['company', 'tension', 'district', 'interval', 'sla', 'dateFrom', 'dateTo'];
+  const filterKeys = ['company', 'tension', 'district', 'interval', 'sla', 'subtipo', 'dateFrom', 'dateTo'];
   let activeCount = filterKeys.filter(k => Boolean(state.filters[k])).length;
   if (state.filters.month || state.filters.monthFrom || state.filters.monthTo) {
     activeCount += 1;
@@ -1382,11 +1477,13 @@ function renderReportTable(tipo, filtered) {
 
     const tensionBadge = r.tension ? `<span class="badge-tension">${escapeHtml(r.tension)}</span>` : '-';
     const slaBadge = tipo === 'Pendiente' ? `<span class="deadline-badge deadline-${sla.status}">${escapeHtml(sla.label)}</span>` : '-';
+    const isOrmRow = r.tipo === 'PENDIENTES ORM' || Boolean(r.is_orm);
+    const ormBadge = isOrmRow ? ' <span class="badge-orm">ORM</span>' : '';
 
     tr.innerHTML = `
       <td style="font-weight:700;color:var(--text-muted)">${start + idx + 1}</td>
       <td>${estadoBadge}</td>
-      <td><strong style="color:var(--pluz-blue);font-size:12.5px">${escapeHtml(r.orden)}</strong></td>
+      <td><strong style="color:var(--pluz-blue);font-size:12.5px">${escapeHtml(r.orden)}</strong>${ormBadge}</td>
       ${tipo === 'Pendiente' ? `<td>${slaBadge}</td>` : `<td><small class="cell-note" title="${escapeHtml(r.nota_especifica || '-')}">${escapeHtml(r.nota_especifica || '-')}</small></td>`}
       <td style="color:var(--text-secondary)">${escapeHtml(r.orden_sistema_origen || '-')}</td>
       <td><b style="color:var(--text-main)">${escapeHtml(r.sed)}</b></td>
@@ -1427,6 +1524,7 @@ function applyReportFilters(tipo) {
   state.filters.district = $(`repFilterDistrict${tipo}`)?.value || '';
   state.filters.interval = $(`repFilterInterval${tipo}`)?.value || '';
   state.filters.sla = tipo === 'Pendiente' ? ($(`repFilterSlaPendiente`)?.value || '') : '';
+  state.filters.subtipo = tipo === 'Pendiente' ? ($(`repFilterSubtipoPendiente`)?.value || '') : '';
   state.filters.dateFrom = $(`repDateFrom${tipo}`)?.value || '';
   state.filters.dateTo = $(`repDateTo${tipo}`)?.value || '';
   state.filters.monthFrom = $(`repMonthFrom${tipo}`)?.value || '';
@@ -1445,6 +1543,9 @@ function resetReportFilters(tipo) {
     const filterSla = $(`repFilterSlaPendiente`);
     if (filterSla) filterSla.value = '';
     $('cardDueSoonPendiente')?.classList.remove('active-filter');
+    const filterSubtipo = $(`repFilterSubtipoPendiente`);
+    if (filterSubtipo) filterSubtipo.value = '';
+    $('cardOrmPendiente')?.classList.remove('active-filter');
   }
   if ($(`repDateFrom${tipo}`)) $(`repDateFrom${tipo}`).value = '';
   if ($(`repDateTo${tipo}`)) $(`repDateTo${tipo}`).value = '';
@@ -1455,7 +1556,7 @@ function resetReportFilters(tipo) {
   updateMonthChipsActive(tipo, '');
 
   state.search = '';
-  state.filters = { company: '', tension: '', district: '', interval: '', sla: '', dateFrom: '', dateTo: '', monthFrom: '', monthTo: '' };
+  state.filters = { company: '', tension: '', district: '', interval: '', sla: '', subtipo: '', dateFrom: '', dateTo: '', monthFrom: '', monthTo: '' };
   state.page = 1;
   updateReportView(tipo);
 }
@@ -1963,6 +2064,19 @@ function setupNavigation() {
     obrasState.page = 1;
     updateObrasView();
   });
+
+  $('cardOrmPendiente')?.addEventListener('click', toggleOrmFilter);
+}
+
+function toggleOrmFilter() {
+  const select = $('repFilterSubtipoPendiente');
+  if (!select) return;
+  select.value = select.value === 'PENDIENTES ORM' ? '' : 'PENDIENTES ORM';
+  applyReportFilters('Pendiente');
+}
+
+export function filterRecords(rows, filters = {}) {
+  return filterMapRows(rows, filters);
 }
 
 async function initApp() {
@@ -2007,15 +2121,19 @@ Object.assign(window, {
   applyMonthPreset,
   applyObrasFilters,
   applyReportFilters,
+  calculateStateCounts,
   changeObrasPage,
   changeReportPage,
   downloadCurrentTable,
   downloadObrasTable,
+  filterRecords,
   handleExactDateChange,
   handleMonthRangeChange,
   handleObrasSort,
   handleTableSort,
   resetObrasFilters,
   resetReportFilters,
-  setObrasSubTab
+  setObrasSubTab,
+  toggleOrmFilter,
+  updateStateKpis
 });

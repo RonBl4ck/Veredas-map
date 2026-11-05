@@ -17,7 +17,19 @@ export function filterMapRows(rows, filters = {}) {
   const normalizedQuery = clean(query).toLowerCase();
 
   return rows.filter((row) => {
-    if (tipo && row.tipo !== tipo) return false;
+    if (tipo) {
+      const fTipo = clean(tipo).toUpperCase();
+      const rTipo = clean(row.tipo || row.TIPO).toUpperCase();
+      if (fTipo === 'PENDIENTES ORM' || fTipo === 'PENDIENTE ORM') {
+        if (rTipo !== 'PENDIENTES ORM' && !row.is_orm) return false;
+      } else if (fTipo === 'PENDIENTE' || fTipo === 'PENDIENTES') {
+        if (rTipo !== 'PENDIENTE' || row.is_orm || rTipo === 'PENDIENTES ORM') return false;
+      } else if (fTipo === 'EJECUTADO' || fTipo === 'EJECUTADOS') {
+        if (rTipo !== 'EJECUTADO') return false;
+      } else if (fTipo !== 'TODOS' && fTipo !== '') {
+        if (row.tipo !== tipo && row.TIPO !== tipo) return false;
+      }
+    }
     if (contractor && clean(row.contratista) !== contractor) return false;
     if (tension && clean(row.tension) !== tension) return false;
     if (district && clean(row.distrito) !== district) return false;
@@ -38,7 +50,10 @@ export function filterMapRows(rows, filters = {}) {
         row.sed,
         row.distrito,
         row.contratista,
-        row.ubicacion_tecnica
+        row.ubicacion_tecnica,
+        row.tipo,
+        row.TIPO,
+        row.estado_original
       ].some((value) => clean(value).toLowerCase().includes(normalizedQuery));
       if (!matches) return false;
     }

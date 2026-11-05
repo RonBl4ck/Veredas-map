@@ -100,6 +100,30 @@
     <div class="map-viewport">
       <div id="map"></div>
 
+      <!-- Barra superior flotante de KPIs / Contadores de Estado en el Mapa -->
+      <aside class="map-kpi-bar" id="mapKpiBar" aria-label="Contadores de Estado">
+        <button type="button" class="map-kpi-pill kpi-pill-total active" data-tipo="" title="Ver todos los registros">
+          <span class="pill-dot dot-total"></span>
+          <span class="pill-text">Todos:</span>
+          <strong id="mapKpiTotal" class="pill-count">0</strong>
+        </button>
+        <button type="button" class="map-kpi-pill kpi-pill-pendiente" data-tipo="Pendiente" title="Filtrar Pendientes Normales">
+          <span class="pill-dot dot-pendiente"></span>
+          <span class="pill-text">Pendientes:</span>
+          <strong id="mapKpiPendientes" class="pill-count">0</strong>
+        </button>
+        <button type="button" class="map-kpi-pill kpi-pill-orm" data-tipo="PENDIENTES ORM" title="Filtrar Pendientes ORM">
+          <span class="pill-dot dot-orm"></span>
+          <span class="pill-text">Pendientes ORM:</span>
+          <strong id="mapKpiOrm" class="pill-count">0</strong>
+        </button>
+        <button type="button" class="map-kpi-pill kpi-pill-ejecutado" data-tipo="Ejecutado" title="Filtrar Ejecutados">
+          <span class="pill-dot dot-ejecutado"></span>
+          <span class="pill-text">Ejecutados:</span>
+          <strong id="mapKpiEjecutados" class="pill-count">0</strong>
+        </button>
+      </aside>
+
       <!-- Leyenda flotante en el mapa -->
       <aside class="map-legend">
         <div class="legend-header">
@@ -108,6 +132,7 @@
         <div class="legend-types">
           <span class="type-pill">🚚 BT / MT</span>
           <span class="type-pill">💡 AP (Alumbrado)</span>
+          <span class="type-pill type-pill-orm">⚙️ Pendientes ORM</span>
           <span class="type-pill">⛑ Obras</span>
         </div>
         <hr class="legend-sep">
@@ -191,6 +216,7 @@
           <select id="mapFilterTipo">
             <option value="" selected>Todos los registros</option>
             <option value="Pendiente">Solo Pendientes</option>
+            <option value="PENDIENTES ORM">Pendientes ORM</option>
             <option value="Ejecutado">Solo Ejecutados</option>
           </select>
         </div>
@@ -270,6 +296,14 @@
               <span class="kpi-label">ALUMBRADO PÚBLICO (AP)</span>
               <strong id="kpiApPendiente" class="kpi-value">0</strong>
               <span class="kpi-foot">Veredas de alumbrado</span>
+            </div>
+          </article>
+          <article class="kpi-card kpi-orm" id="cardOrmPendiente" title="Clic para filtrar Pendientes ORM">
+            <div class="kpi-icon-wrap icon-orm">⚙️</div>
+            <div class="kpi-data">
+              <span class="kpi-label">PENDIENTES ORM</span>
+              <strong id="kpiOrmPendiente" class="kpi-value">0</strong>
+              <span class="kpi-foot">Mantenimiento IW49N</span>
             </div>
           </article>
           <article id="cardDueSoonPendiente" class="kpi-card kpi-due-soon" title="Clic para filtrar órdenes que vencen hoy">
@@ -405,6 +439,15 @@
               <input id="repDateToPendiente" type="date" onchange="applyReportFilters('Pendiente')">
             </label>
           </div>
+        </div>
+
+        <div class="filter-group">
+          <label for="repFilterSubtipoPendiente">Tipo de Pendiente</label>
+          <select id="repFilterSubtipoPendiente" onchange="applyReportFilters('Pendiente')">
+            <option value="">Todos los pendientes</option>
+            <option value="NORMAL">Pendientes Normales</option>
+            <option value="PENDIENTES ORM">Solo Pendientes ORM</option>
+          </select>
         </div>
 
         <div class="filter-group">
