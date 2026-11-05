@@ -176,10 +176,26 @@ function normalizeIntervalString(intervalStr, fechaInicio, fechaFin, tipo) {
 function parseDateOnly(dateStr) {
   if (!dateStr) return '';
   const cleanStr = String(dateStr).trim().split(' ')[0].split('T')[0];
-  // Si viene como DD/MM/YYYY
+  // Si viene como DD/MM/YYYY o YYYY/MM/DD
   if (cleanStr.includes('/')) {
     const parts = cleanStr.split('/');
     if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      const d = parts[0].padStart(2, '0');
+      const m = parts[1].padStart(2, '0');
+      const y = parts[2];
+      return `${y}-${m}-${d}`;
+    }
+  }
+  // Si viene como DD.MM.YYYY o YYYY.MM.DD
+  if (cleanStr.includes('.')) {
+    const parts = cleanStr.split('.');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
       const d = parts[0].padStart(2, '0');
       const m = parts[1].padStart(2, '0');
       const y = parts[2];
@@ -285,6 +301,7 @@ function mapCsvRowToRecord(r, originalIndex) {
       r.FECHA_ACTUALIZACION_SISTEMA || r.fecha_actualizacion_sistema ||
       r.FECHA_ACTUALIZACION || r.fecha_actualizacion
     ),
+    origen_coordenada: clean(r.ORIGEN_COORDENADA || r.origen_coordenada || r.NIVEL_UBICACION || r.FUENTE_COORDENADA || ''),
     nota_especifica: clean(r.NOTA_ESPECIFICA || r.NOTA_ESPECIFICA_OMS || r.nota_especifica),
     ubicacion_tecnica: clean(r.UBICACION_TECNICA || r.ubicacion_tecnica),
     grupo_hojas_ruta: clean(r.GRUPO_HOJAS_RUTA || r.grupo_hojas_ruta)
@@ -306,7 +323,7 @@ function isPeruCoordinate(record) {
 function formatShortDate(dateStr) {
   if (!dateStr) return '-';
   const cleanStr = String(dateStr).trim().split(' ')[0].split('T')[0];
-  const parts = cleanStr.includes('/') ? cleanStr.split('/') : cleanStr.split('-');
+  const parts = cleanStr.includes('/') ? cleanStr.split('/') : (cleanStr.includes('.') ? cleanStr.split('.') : cleanStr.split('-'));
   if (parts.length === 3) {
     if (parts[0].length === 4) {
       return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
@@ -519,9 +536,124 @@ function wrapMarkerWithHalo(innerSvg, slaStatus) {
   `;
 }
 
+function getCoordOriginBadgeHtml(origen) {
+  const val = clean(origen).toUpperCase();
+  if (!val) return '';
+  let cls = 'sed';
+  let icon = '🏢';
+  if (val.includes('OMS')) {
+    cls = 'oms';
+    icon = '🎯';
+  } else if (val.includes('SUMINISTRO')) {
+    cls = 'suministro';
+    icon = '⚡';
+  } else if (val.includes('SED')) {
+    cls = 'sed';
+    icon = '🏢';
+  }
+  return `
+    <div style="margin-bottom:6px">
+      <span class="coord-origin-badge coord-origin-${cls}">
+        ${icon} Origen: ${escapeHtml(val)}
+      </span>
+    </div>
+  `;
+}
+
+function setupPopupCollisionManager(mapInstance) {
+  let arrangeTimer = null;
+  const scheduleArrange = (delay = 40) => {
+    clearTimeout(arrangeTimer);
+    arrangeTimer = setTimeout(arrangePopups, delay);
+  };
+
+  function arrangePopups() {
+    const popupElements = Array.from(document.querySelectorAll('.leaflet-popup'));
+    if (popupElements.length < 2) {
+      popupElements.forEach(el => {
+        const wrapper = el.querySelector('.leaflet-popup-content-wrapper');
+        if (wrapper) wrapper.style.transform = '';
+      });
+      return;
+    }
+
+    const items = popupElements.map(el => {
+      const rect = el.getBoundingClientRect();
+      return {
+        el,
+        wrapper: el.querySelector('.leaflet-popup-content-wrapper'),
+        cx: rect.left + rect.width / 2,
+        cy: rect.top + rect.height / 2,
+        width: rect.width,
+        height: rect.height
+      };
+    }).filter(item => item.width > 0 && item.height > 0);
+
+    if (items.length < 2) return;
+
+    // Agrupar por proximidad / colisión
+    const clusters = [];
+    const visited = new Set();
+    const THRESHOLD_X = 260;
+    const THRESHOLD_Y = 190;
+
+    for (let i = 0; i < items.length; i++) {
+      if (visited.has(i)) continue;
+      const cluster = [items[i]];
+      visited.add(i);
+
+      for (let j = 0; j < items.length; j++) {
+        if (visited.has(j)) continue;
+        const isClose = cluster.some(c => (
+          Math.abs(c.cx - items[j].cx) < THRESHOLD_X &&
+          Math.abs(c.cy - items[j].cy) < THRESHOLD_Y
+        ));
+        if (isClose) {
+          cluster.push(items[j]);
+          visited.add(j);
+        }
+      }
+      clusters.push(cluster);
+    }
+
+    // Aplicar desplazamientos inteligentes por cluster
+    clusters.forEach(cluster => {
+      if (cluster.length === 1) {
+        if (cluster[0].wrapper) cluster[0].wrapper.style.transform = '';
+        return;
+      }
+
+      const n = cluster.length;
+      if (n === 2) {
+        // Ordenar horizontalmente
+        cluster.sort((a, b) => a.cx - b.cx);
+        if (cluster[0].wrapper) cluster[0].wrapper.style.transform = 'translate(-62%, -8px)';
+        if (cluster[1].wrapper) cluster[1].wrapper.style.transform = 'translate(62%, 8px)';
+      } else {
+        // Distribución en abanico radial adaptativo para 3 o más
+        const radius = Math.min(230, 110 + (n * 18));
+        cluster.forEach((item, idx) => {
+          const angle = (2 * Math.PI * idx / n) - (Math.PI / 2);
+          const dx = Math.round(radius * Math.cos(angle));
+          const dy = Math.round(radius * Math.sin(angle) * 0.75);
+          if (item.wrapper) {
+            item.wrapper.style.transform = `translate(${dx}px, ${dy}px)`;
+          }
+        });
+      }
+    });
+  }
+
+  mapInstance.on('popupopen', () => scheduleArrange(40));
+  mapInstance.on('popupclose', () => scheduleArrange(40));
+  mapInstance.on('move', arrangePopups);
+  mapInstance.on('zoomend', () => scheduleArrange(90));
+  mapInstance.on('resize', () => scheduleArrange(90));
+}
+
 function initMap() {
   if (map) return;
-  map = L.map('map', { zoomControl: true }).setView([-11.99, -77.05], 12);
+  map = L.map('map', { zoomControl: true, closePopupOnClick: false }).setView([-11.99, -77.05], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
 
   markerLayer = L.markerClusterGroup({
@@ -532,6 +664,7 @@ function initMap() {
     showCoverageOnHover: false
   });
   map.addLayer(markerLayer);
+  setupPopupCollisionManager(map);
 
   // Filtros de órdenes y opciones
   $('mapSearchInput').addEventListener('input', () => {
@@ -695,11 +828,13 @@ function renderMap() {
           </span>
         </div>
       ` : '';
+      const coordBadge = getCoordOriginBadgeHtml(r.origen_coordenada);
 
       const popupHtml = `
         <div style="min-width:260px;font-size:12px;line-height:1.4">
           <div style="font-weight:900;color:var(--navy);font-size:14px;margin-bottom:4px">⛑ ${escapeHtml(r.source)}</div>
           ${slaBadgeHtml}
+          ${coordBadge}
           <div><b>LCL/ODM:</b> ${escapeHtml(r.lcl)}</div>
           <div><b>Estado:</b> ${escapeHtml(r.estado_original || '-')}</div>
           <div><b>Contratista:</b> <span style="color:${companyColor};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
@@ -711,7 +846,7 @@ function renderMap() {
           <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">Abrir en Google Maps</a>
         </div>
       `;
-      m.bindPopup(popupHtml);
+      m.bindPopup(popupHtml, { autoClose: false, closeOnClick: false });
       markerLayer.addLayer(m);
       bounds.push([drawLat, drawLon]);
       return;
@@ -725,6 +860,7 @@ function renderMap() {
         </span>
       </div>
     ` : '';
+    const coordBadge = getCoordOriginBadgeHtml(r.origen_coordenada);
 
     const popupHtml = `
       <div style="min-width:260px;font-size:12px;line-height:1.4">
@@ -732,6 +868,7 @@ function renderMap() {
           ${escapeHtml(r.tipo)}: Orden ${escapeHtml(r.orden)}
         </div>
         ${regularSlaBadge}
+        ${coordBadge}
         <div><b>Orden Origen:</b> ${escapeHtml(r.orden_sistema_origen || '-')}</div>
         <div><b>SED:</b> ${escapeHtml(r.sed)} (${escapeHtml(r.distrito)})</div>
         <div><b>Contratista:</b> <span style="color:${companyColor};font-weight:bold">${escapeHtml(r.contratista)}</span></div>
@@ -744,7 +881,7 @@ function renderMap() {
         <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lon}" target="_blank">🗺 Abrir en Google Maps</a>
       </div>
     `;
-    m.bindPopup(popupHtml);
+    m.bindPopup(popupHtml, { autoClose: false, closeOnClick: false });
     markerLayer.addLayer(m);
     bounds.push([drawLat, drawLon]);
   });
@@ -799,7 +936,7 @@ async function searchSupplyOnMap() {
         <span>Longitud: ${escapeHtml(supply.longitud.toFixed(7))}</span>
         <a class="gmaps-popup-btn" href="https://www.google.com/maps/search/?api=1&query=${supply.latitud},${supply.longitud}" target="_blank" rel="noopener noreferrer">Abrir en Google Maps</a>
       </div>
-    `).openPopup();
+    `, { autoClose: false, closeOnClick: false }).openPopup();
 
     $('mapSupplyInput').value = supply.suministro;
     $('btnClearSupplyPin').style.display = 'inline-block';
@@ -842,7 +979,7 @@ async function searchAddressOnMap() {
           Latitud: ${lat}<br>
           Longitud: ${lon}
         </div>
-      `).openPopup();
+      `, { autoClose: false, closeOnClick: false }).openPopup();
 
       $('btnClearAddressPin').style.display = 'block';
       $('mapStatusChip').textContent = 'Coordenadas ubicadas';
@@ -874,7 +1011,7 @@ async function searchAddressOnMap() {
           <b style="color:var(--navy)">📍 Lugar Encontrado:</b><br>
           ${escapeHtml(first.display_name)}
         </div>
-      `).openPopup();
+      `, { autoClose: false, closeOnClick: false }).openPopup();
 
       $('btnClearAddressPin').style.display = 'block';
       $('mapStatusChip').textContent = 'Ubicación encontrada';
