@@ -541,16 +541,23 @@ function iconSvg(tension, color) {
 }
 
 function ormIconSvg(color = '#7C3AED') {
-  return `<svg viewBox="0 0 36 34" class="orm-marker-svg" aria-label="Pendiente ORM">
-    <rect x="3" y="3" width="30" height="28" rx="8" fill="${color}" stroke="#4C1D95" stroke-width="1.6"/>
-    <path d="M12 17h12M18 11v12" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
-    <circle cx="18" cy="17" r="8.5" fill="none" stroke="#DDD6FE" stroke-width="1.5" stroke-dasharray="2 2"/>
-    <circle cx="18" cy="17" r="3" fill="#FFFFFF"/>
+  return `<svg viewBox="0 0 36 34" class="orm-marker-svg" aria-label="Pendiente ORM - Pala">
+    <!-- Empuñadura ergonómica en D -->
+    <path d="M24 5 L29 10 L27 12 L22 7 Z" fill="#DDD6FE" stroke="#17384D" stroke-width="1.3"/>
+    <path d="M26 4 C29 1 33 5 30 8" fill="none" stroke="#17384D" stroke-width="1.6" stroke-linecap="round"/>
+    <!-- Mango de madera -->
+    <path d="M23 8 L14 17" stroke="#B45309" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- Cuello de unión reforzado -->
+    <path d="M15 15 L12 18" stroke="#4C1D95" stroke-width="3.2" stroke-linecap="round"/>
+    <!-- Hoja / Pala de excavación -->
+    <path d="M13 15 L19 21 C17 27 12 30 7 28 C5 23 8 17 13 15 Z" fill="${color}" stroke="#17384D" stroke-width="1.5" stroke-linejoin="round"/>
+    <!-- Nervio central y bisel metálico -->
+    <path d="M14 18 L9 25" stroke="#EDE9FE" stroke-width="1.3" stroke-linecap="round"/>
   </svg>`;
 }
 
 function wrapMarkerWithHalo(innerSvg, slaStatus, isOrm = false) {
-  const ringClass = isOrm ? 'sla-ring-orm' : (slaStatus ? `sla-ring-${slaStatus}` : 'sla-ring-en_plazo');
+  const ringClass = slaStatus ? `sla-ring-${slaStatus}` : 'sla-ring-en_plazo';
   const ormClass = isOrm ? 'marker-orm' : '';
   return `
     <div class="works-marker-wrapper ${ringClass} ${ormClass}">
@@ -932,7 +939,15 @@ function renderMap() {
     const coordBadge = getCoordOriginBadgeHtml(r.origen_coordenada);
     const ormBadge = isOrm ? `
       <div style="margin-bottom:6px">
-        <span class="badge-orm">⚙️ PENDIENTE ORM</span>
+        <span class="badge-orm">
+          <svg viewBox="0 0 20 20" width="13" height="13" style="vertical-align:-2px;margin-right:4px;display:inline-block" fill="none">
+            <path d="M14 2 L17 5 L15 7 L12 4 Z" fill="#DDD6FE" stroke="#4C1D95" stroke-width="1.2"/>
+            <path d="M15 2 C17 0.5 19.5 3 17.5 5" stroke="#4C1D95" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M13 4.5 L7.5 10" stroke="#B45309" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M8 9 L6.5 10.5" stroke="#4C1D95" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M7 9.5 L10.5 13 C9.5 16.5 6.5 18 3.5 17 C2.5 14 4 11 7 9.5 Z" fill="#7C3AED" stroke="#4C1D95" stroke-width="1.2"/>
+          </svg>PENDIENTE ORM
+        </span>
       </div>
     ` : '';
 
